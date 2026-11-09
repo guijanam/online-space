@@ -107,6 +107,7 @@ export const plaza: ThemeDef = {
   keepOut: 0.5,
   spawn: [3, 6],
   cameraOffset: [0, 12, 12],
+  hint: '바닥을 톡 눌러 걸어보세요',
   sound: { ambience: 'dusk', footstep: 'grass' },
   build,
 }

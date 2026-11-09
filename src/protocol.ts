@@ -10,6 +10,9 @@ export const MAX_MESSAGE_BYTES = 256
 
 const LIMIT = WORLD_RADIUS + 1
 const coord = z.number().min(-LIMIT).max(LIMIT)
+/** 앉은/누운 자리 번호 (-1 = 서 있음). 이전 버전 클라이언트는 이 필드를 보내지 않는다. */
+export const MAX_SPOTS = 32
+const seat = z.number().int().min(-1).max(MAX_SPOTS - 1).optional()
 
 // z.object 는 알 수 없는 필드를 버린다 → 자유 텍스트를 실을 자리가 없다.
 export const StateMsg = z.object({
@@ -17,8 +20,9 @@ export const StateMsg = z.object({
   x: coord,
   z: coord,
   joinedAt: z.number().int().min(0).max(1e13),
+  seat,
 })
-export const MoveMsg = z.object({ x: coord, z: coord })
+export const MoveMsg = z.object({ x: coord, z: coord, seat })
 export const ActMsg = z.object({ id: z.enum(ACTION_IDS) })
 
 export type StateMsg = z.infer<typeof StateMsg>

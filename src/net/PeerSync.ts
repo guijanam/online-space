@@ -7,14 +7,15 @@ import type { MessageAction, Room } from './strategy'
 export type PeerHandlers = {
   /** 피어 상태 수신 (처음이면 isNew=true) */
   onState(peerId: string, s: StateMsg, isNew: boolean): void
-  onMove(peerId: string, x: number, z: number): void
+  /** seat: 가려는 자리 번호 (-1 = 그냥 걷기) */
+  onMove(peerId: string, x: number, z: number, seat: number): void
   onAction(peerId: string, id: ActionId): void
   onLeave(peerId: string): void
   /** 도배로 숨김 처리된 피어 */
   onMuted(peerId: string): void
 }
 
-export type SelfSnapshot = () => { x: number; z: number; joinedAt: number }
+export type SelfSnapshot = () => { x: number; z: number; joinedAt: number; seat: number }
 
 type Wire = Record<string, number | string>
 
@@ -71,12 +72,12 @@ export class PeerSync {
 
   sendState(target?: string): Promise<void> {
     const s = this.self()
-    const msg: StateMsg = { v: PROTOCOL_VERSION, x: round2(s.x), z: round2(s.z), joinedAt: s.joinedAt }
+    const msg: StateMsg = { v: PROTOCOL_VERSION, x: round2(s.x), z: round2(s.z), joinedAt: s.joinedAt, seat: s.seat }
     return this.st.send(msg, target ? { target } : undefined).catch(() => {})
   }
 
-  sendMove(x: number, z: number): void {
-    void this.mv.send({ x: round2(x), z: round2(z) }).catch(() => {})
+  sendMove(x: number, z: number, seat = -1): void {
+    void this.mv.send({ x: round2(x), z: round2(z), seat }).catch(() => {})
   }
 
   sendAction(id: ActionId): void {
@@ -113,7 +114,7 @@ export class PeerSync {
     if (!r.success) return this.reject(peerId)
     if (!this.guard.allowMove(peerId)) return void this.checkMuted(peerId)
     const p = clampToWorld(r.data.x, r.data.z)
-    this.h.onMove(peerId, p.x, p.z)
+    this.h.onMove(peerId, p.x, p.z, r.data.seat ?? -1)
   }
 
   private recvAction(peerId: string, data: unknown): void {

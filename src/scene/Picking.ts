@@ -11,7 +11,12 @@ const TAP_MAX_MS = 450
 export function attachPicking(
   el: HTMLElement,
   camera: THREE.Camera,
-  onPick: (x: number, z: number) => void,
+  opts: {
+    /** 먼저 검사할 물체들 (의자·텐트). userData.spots 에 자리 번호 */
+    targets: THREE.Object3D[]
+    onTarget(spots: number[]): void
+    onGround(x: number, z: number): void
+  },
 ): () => void {
   const ray = new THREE.Raycaster()
   const ndc = new THREE.Vector2()
@@ -32,6 +37,13 @@ export function attachPicking(
     const r = el.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
+    if (opts.targets.length) {
+      for (const h of ray.intersectObjects(opts.targets, false)) {
+        const spots = h.object.userData.spots as number[] | undefined
+        if (spots?.length) return opts.onTarget(spots)
+      }
+    }
+    const onPick = opts.onGround
     const dir = ray.ray.direction
     if (dir.y < -0.02 && ray.ray.intersectPlane(ground, hit)) {
       onPick(hit.x, hit.z)

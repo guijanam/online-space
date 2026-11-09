@@ -29,6 +29,15 @@ describe('protocol', () => {
     expect(StateMsg.safeParse({ ...ok, v: 999 }).success).toBe(false)
   })
 
+  it('자리 번호는 정수 범위만, 없어도 된다 (이전 버전 호환)', () => {
+    expect(MoveMsg.safeParse({ x: 0, z: 0 }).success).toBe(true)
+    expect(MoveMsg.safeParse({ x: 0, z: 0, seat: 3 }).data?.seat).toBe(3)
+    expect(MoveMsg.safeParse({ x: 0, z: 0, seat: -1 }).success).toBe(true)
+    expect(MoveMsg.safeParse({ x: 0, z: 0, seat: 99 }).success).toBe(false)
+    expect(MoveMsg.safeParse({ x: 0, z: 0, seat: 1.5 }).success).toBe(false)
+    expect(MoveMsg.safeParse({ x: 0, z: 0, seat: '의자' }).success).toBe(false)
+  })
+
   it('clampToWorld 는 원 밖 좌표를 경계로 끌어온다', () => {
     const p = clampToWorld(100, 0)
     expect(p.x).toBeCloseTo(WORLD_RADIUS - 0.5)

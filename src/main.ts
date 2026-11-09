@@ -15,6 +15,7 @@ import { attachPicking, TapMarker } from './scene/Picking'
 import type { ThemeDef } from './scene/World'
 import { ActionBar } from './ui/ActionBar'
 import { Status } from './ui/Status'
+import { Toast } from './ui/Toast'
 import { pickTheme } from './ui/ThemePicker'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
@@ -81,6 +82,11 @@ function start(theme: ThemeDef): void {
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100)
   const world = theme.build(scene)
   Avatar.keepOut = theme.keepOut
+  const spots = world.spots ?? []
+  /** 네트워크로 받은 자리 번호를 이 테마의 자리로 (범위 밖이면 null) */
+  const spotAt = (i: number | undefined) => (i !== undefined && i >= 0 ? (spots[i] ?? null) : null)
+  const toast = new Toast($('#toast'))
+  $('#hint').textContent = theme.hint
   const marker = new TapMarker()
   scene.add(marker.mesh)
 
@@ -164,23 +170,59 @@ function start(theme: ThemeDef): void {
     }
   }
 
+  /**
+   * 같은 자리를 두 사람이 동시에 차지했으면 peerId 가 큰 쪽이 양보한다.
+   * 양쪽이 같은 규칙으로 판단하므로 조율 메시지가 필요 없다.
+   */
+  const resolveSeatConflict = () => {
+    const mine = me.seatIndex
+    const s = spotAt(mine)
+    if (!s) return
+    for (const [id, a] of others) {
+      if (a.seatIndex === mine && selfId > id) {
+        standAndWalk(s.ax, s.az)
+        toast.show('다른 분이 먼저 자리를 잡았어요')
+        return
+      }
+    }
+  }
+
+  /** 다른 사람의 이동/자리 변경을 반영 */
+  const applyRemote = (a: Avatar, x: number, z: number, seatIdx: number | undefined, instant: boolean) => {
+    const s = spotAt(seatIdx)
+    if (s) {
+      if (instant) a.placeInSpot(seatIdx!, s)
+      else a.goToSpot(seatIdx!, s)
+    } else if (instant) {
+      a.placeAt(x, z)
+    } else {
+      a.walkTo(x, z)
+    }
+    resolveSeatConflict()
+  }
+
   const handlers: PeerHandlers = {
     onState(id, s, isNew) {
       let a = others.get(id)
       if (!a) {
         a = new Avatar(id)
         a.onStep = stepOf(a)
-        a.placeAt(s.x, s.z)
         scene.add(a.root)
         others.set(id, a)
+        applyRemote(a, s.x, s.z, s.seat, true)
       } else if (!isNew) {
-        a.walkTo(s.x, s.z)
+        // 하트비트: 이미 같은 자리에 있으면 그대로 둔다
+        const seatNow = s.seat ?? -1
+        if (seatNow < 0 || seatNow !== a.seatIndex) applyRemote(a, s.x, s.z, seatNow, false)
       }
       joinedAt.set(id, s.joinedAt)
       refreshStatus()
       checkOverflow()
     },
-    onMove: (id, x, z) => others.get(id)?.walkTo(x, z),
+    onMove(id, x, z, seatIdx) {
+      const a = others.get(id)
+      if (a) applyRemote(a, x, z, seatIdx, false)
+    },
     onAction: (id, act) => others.get(id)?.play(act, clock()),
     onLeave: removePeer,
     onMuted: removePeer,
@@ -209,7 +251,7 @@ function start(theme: ThemeDef): void {
     seat = s
     sync = new PeerSync(
       s.room,
-      () => ({ x: me.destination.x, z: me.destination.z, joinedAt: s.joinedAt }),
+      () => ({ x: me.destination.x, z: me.destination.z, joinedAt: s.joinedAt, seat: me.seatIndex }),
       handlers,
     )
     sync.start()
@@ -218,7 +260,7 @@ function start(theme: ThemeDef): void {
   }
 
   // ── 입력: 탭 이동 (전송은 1초에 1번, 마지막 목적지만) ─────────────────────────
-  let pendingMove: { x: number; z: number } | null = null
+  let pendingMove: { x: number; z: number; seat: number } | null = null
   let moveTimer: ReturnType<typeof setTimeout> | undefined
   const flushMove = () => {
     if (!pendingMove) return
@@ -230,17 +272,44 @@ function start(theme: ThemeDef): void {
       }, wait)
       return
     }
-    sync?.sendMove(pendingMove.x, pendingMove.z)
+    sync?.sendMove(pendingMove.x, pendingMove.z, pendingMove.seat)
     limiter.markMove()
     pendingMove = null
   }
-  attachPicking(renderer.domElement, camera, (x, z) => {
+  const queueMove = (x: number, z: number, seatIdx: number) => {
+    pendingMove = { x, z, seat: seatIdx }
+    flushMove()
+  }
+
+  function standAndWalk(x: number, z: number): void {
     const c = clampToWorld(x, z)
     const p = pushOut(c.x, c.z, theme.keepOut)
     me.walkTo(p.x, p.z)
+    world.focusSpot?.(-1)
     marker.show(p.x, p.z)
-    pendingMove = p
-    flushMove()
+    queueMove(p.x, p.z, -1)
+  }
+
+  /** 의자/텐트를 눌렀을 때: 빈 자리가 있으면 가서 앉거나 눕는다 */
+  const takeSpot = (ids: number[]) => {
+    if (ids.includes(me.seatIndex)) return
+    const taken = new Set([...others.values()].map((a) => a.seatIndex))
+    const free = ids.find((i) => !taken.has(i) && spots[i])
+    if (free === undefined) {
+      toast.show(spots[ids[0]]?.kind === 'lie' ? '텐트에 자리가 없어요' : '이미 다른 분이 앉아 있어요')
+      return
+    }
+    const s = spots[free]
+    me.goToSpot(free, s)
+    world.focusSpot?.(free)
+    marker.show(s.ax, s.az)
+    queueMove(s.ax, s.az, free)
+  }
+
+  attachPicking(renderer.domElement, camera, {
+    targets: world.targets ?? [],
+    onTarget: takeSpot,
+    onGround: standAndWalk,
   })
 
   // ── 입력: 행동 버튼 ───────────────────────────────────────────────────────
@@ -307,6 +376,23 @@ function start(theme: ThemeDef): void {
           return sync?.peers() ?? []
         },
         audio,
+        /** 자리 i 의 화면 좌표 (E2E 에서 실제로 탭해 보기 위함) */
+        screenOfSpot(i: number) {
+          const sp = spots[i]
+          // 의자는 좌석, 텐트는 몸통 가운데 (발 위치에서 텐트 안쪽으로)
+          const v =
+            sp.kind === 'lie'
+              ? new THREE.Vector3(sp.x * 2 - sp.ax, 1.0, sp.z * 2 - sp.az).project(camera)
+              : new THREE.Vector3(sp.x, 0.7, sp.z).project(camera)
+          const r = renderer.domElement.getBoundingClientRect()
+          return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }
+        },
+        get mySeat() {
+          return me.seatIndex
+        },
+        get seats() {
+          return Object.fromEntries([...others].map(([id, a]) => [id, a.seatIndex]))
+        },
       },
     })
   }

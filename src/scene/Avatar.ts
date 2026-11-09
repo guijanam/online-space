@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { getAction, type ActionId } from '../actions'
 import { hueFor, nicknameFor } from '../identity'
+import type { SpotDef } from './themes/common'
 
 // 모든 아바타가 지오메트리를 공유한다
 const GEO = {
@@ -59,7 +60,9 @@ function labelSprite(text: string, self: boolean): THREE.Sprite {
   g.fillText(text, 128, 33)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }))
+  // 이름표는 텐트·나무에 가려지지 않게 항상 위에 그린다
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false }))
+  s.renderOrder = 10
   s.scale.set(1.7, 0.425, 1)
   s.position.y = 2.05
   return s
@@ -98,6 +101,16 @@ export class Avatar {
   /** 한 걸음 디딜 때마다 (발소리용) */
   onStep: (() => void) | null = null
 
+  /** 차지한(또는 가는 중인) 자리 번호, -1 = 서 있음 */
+  seatIndex = -1
+  private spot: SpotDef | null = null
+  /** 자리에 들어가는 중 (다가가는 지점 → 자리) */
+  private settle: { from: THREE.Vector3; yaw0: number; t: number } | null = null
+  private seated = false
+  /** 자세 섞는 정도 0(서기)~1(앉기/눕기), 일어날 때 부드럽게 풀기 위해 마지막 자세를 기억 */
+  private poseW = 0
+  private poseKind: SpotDef['kind'] = 'sit'
+
   constructor(
     readonly peerId: string,
     readonly isSelf = false,
@@ -132,7 +145,8 @@ export class Avatar {
     }
 
     this.label = labelSprite(this.nickname, isSelf)
-    this.emote = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false }))
+    this.emote = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthWrite: false, depthTest: false }))
+    this.emote.renderOrder = 11
     this.emote.visible = false
     this.root.add(this.label, this.emote)
   }
@@ -147,14 +161,47 @@ export class Avatar {
   }
 
   placeAt(x: number, z: number): void {
+    this.leaveSpot()
     const p = pushOut(x, z, Avatar.keepOut)
     this.root.position.set(p.x, 0, p.z)
     this.target = null
   }
 
+  /** 그냥 걷기 — 앉아 있었다면 일어나서 간다 */
   walkTo(x: number, z: number): void {
+    this.leaveSpot()
     const p = pushOut(x, z, Avatar.keepOut)
     this.target = new THREE.Vector3(p.x, 0, p.z)
+  }
+
+  /** 자리로 걸어가서 앉거나 눕는다 */
+  goToSpot(index: number, spot: SpotDef): void {
+    if (this.seatIndex === index && this.spot) return
+    this.leaveSpot()
+    this.seatIndex = index
+    this.spot = spot
+    this.poseKind = spot.kind
+    this.target = new THREE.Vector3(spot.ax, 0, spot.az)
+  }
+
+  /** 이미 앉아/누워 있는 상태로 바로 배치 (늦게 들어온 사람이 볼 때) */
+  placeInSpot(index: number, spot: SpotDef): void {
+    this.seatIndex = index
+    this.spot = spot
+    this.poseKind = spot.kind
+    this.settle = null
+    this.seated = true
+    this.poseW = 1
+    this.target = null
+    this.root.position.set(spot.x, 0, spot.z)
+    this.rig.rotation.y = spot.yaw
+  }
+
+  private leaveSpot(): void {
+    this.seatIndex = -1
+    this.spot = null
+    this.settle = null
+    this.seated = false
   }
 
   play(id: ActionId, now: number): void {
@@ -173,6 +220,9 @@ export class Avatar {
       const dist = d.length()
       if (dist < 0.05) {
         this.target = null
+        if (this.spot && !this.seated) {
+          this.settle = { from: this.root.position.clone(), yaw0: this.rig.rotation.y, t: 0 }
+        }
       } else {
         walking = true
         const step = Math.min(dist, WALK_SPEED * dt)
@@ -203,6 +253,23 @@ export class Avatar {
         this.rig.rotation.y += diff * Math.min(1, dt * 10)
       }
     }
+    // 자리에 들어가기: 다가가는 지점에서 자리로 미끄러지듯 이동하며 방향을 맞춘다
+    if (this.settle && this.spot) {
+      const s = this.settle
+      s.t = Math.min(1, s.t + dt / 0.5)
+      const e = s.t * s.t * (3 - 2 * s.t)
+      this.root.position.lerpVectors(s.from, new THREE.Vector3(this.spot.x, 0, this.spot.z), e)
+      let diff = this.spot.yaw - s.yaw0
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff))
+      this.rig.rotation.y = s.yaw0 + diff * e
+      if (s.t >= 1) {
+        this.settle = null
+        this.seated = true
+      }
+    }
+    const poseGoal = this.seated || this.settle ? 1 : 0
+    this.poseW += (poseGoal - this.poseW) * Math.min(1, dt * 6)
+
     this.walkPhase = walking ? this.walkPhase + dt * 11 : this.walkPhase * 0.85
     // 팔 흔들기 반 주기 = 한 걸음
     const stepIdx = Math.floor(this.walkPhase / Math.PI)
@@ -260,6 +327,35 @@ export class Avatar {
         this.emote.material.opacity = Math.min(1, (1 - p) * 3)
       }
     }
+
+    // 앉기/눕기 자세 (행동 애니메이션 위에 더한다)
+    const w = this.poseW
+    let lie = 0
+    if (w > 0.001) {
+      if (this.poseKind === 'sit') {
+        // 다리가 없는 몸이라 의자 천(좌석 높이 ≈0.57)에 몸 아랫부분이 묻히도록 앉히고, 등받이에 기댄다
+        lift += 0.36 * w
+        tiltX += -0.2 * w
+        armL += -0.4 * w
+        armR += 0.4 * w
+        stretch *= 1 - 0.08 * w
+      } else {
+        // 발을 축으로 뒤로 눕는다 (YXZ 순서라 머리가 몸 뒤쪽 = 텐트 안쪽으로)
+        lie = w
+        lift += 0.3 * w
+        tiltX += (-Math.PI / 2) * w
+        armL *= 1 - w
+        armR *= 1 - w
+      }
+    }
+    // 누우면 이름표·이모지를 머리 쪽으로 옮긴다
+    const yaw = this.rig.rotation.y
+    const hx = -Math.sin(yaw) * 0.9 * lie
+    const hz = -Math.cos(yaw) * 0.9 * lie
+    this.label.position.set(hx, 2.05 - 1.15 * lie, hz)
+    this.emote.position.x = hx
+    this.emote.position.z = hz
+    if (lie > 0 && this.act) this.emote.position.y -= 1.15 * lie
 
     this.armL.rotation.z = armL
     this.armR.rotation.z = armR

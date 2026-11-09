@@ -1,10 +1,29 @@
 import * as THREE from 'three'
 import type { AmbienceId, FootstepKind } from '../../audio/sounds'
 
+/** 앉거나 누울 수 있는 자리 (의자, 텐트) */
+export type SpotDef = {
+  kind: 'sit' | 'lie'
+  /** 자리 위치 — 앉기: 의자 중심, 눕기: 발 위치 */
+  x: number
+  z: number
+  /** 다가가는 지점 — 여기까지 걸어온 뒤 자리로 들어간다 */
+  ax: number
+  az: number
+  /** 몸이 바라보는 방향 (눕기는 발→머리 반대 방향) */
+  yaw: number
+}
+
 export type WorldHandle = {
-  /** 탭으로 이동할 수 있는 바닥 (Raycaster 대상) */
+  /** 탭으로 이동할 수 있는 바닥 */
   floor: THREE.Mesh
   update(dt: number, t: number): void
+  /** 자리 목록 (인덱스가 네트워크로 오간다) */
+  spots?: SpotDef[]
+  /** 탭할 수 있는 물체. userData.spots: number[] 에 자리 인덱스 */
+  targets?: THREE.Object3D[]
+  /** 내가 차지한 자리 (-1 없음) — 텐트를 반투명하게 하는 등 */
+  focusSpot?(index: number): void
 }
 
 export type ThemeDef = {
@@ -20,6 +39,8 @@ export type ThemeDef = {
   spawn: [number, number]
   /** 바라보는 지점 기준 카메라 위치 */
   cameraOffset: [number, number, number]
+  /** 처음 들어왔을 때 잠깐 보여주는 안내 */
+  hint: string
   /** 배경 소리와 발소리 종류 */
   sound: { ambience: AmbienceId; footstep: FootstepKind }
   build(scene: THREE.Scene): WorldHandle

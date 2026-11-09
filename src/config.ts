@@ -1,7 +1,8 @@
 import type { TurnServerConfig } from 'trystero'
 
 /** Trystero 앱 네임스페이스. 프로토콜이 호환되지 않게 바뀌면 v 숫자를 올린다. */
-export const APP_ID = 'crew-healing-space-v1'
+export const APP_ID = 'crew-healing-space-v1' + (import.meta.env.DEV ? '-dev' : '')
+// ↑ 개발 서버(npm run dev)는 별도 공간을 써서 실제 사용자 방에 테스트 아바타가 섞이지 않게 한다
 
 /**
  * 시그널링(SDP) 암호화용 공유 비밀번호.

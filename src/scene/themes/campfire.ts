@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { WORLD_RADIUS } from '../../config'
-import { flatDisc, forestRing, glowTexture, seeded, skyTexture, type ThemeDef, type WorldHandle } from './common'
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { flatDisc, forestRing, glowTexture, seeded, skyTexture, type SpotDef, type ThemeDef, type WorldHandle } from './common'
 
 /** 산속 캠핑 — 별 쏟아지는 밤, 산 능선, 텐트, 가운데 모닥불에서 불멍 */
 function build(scene: THREE.Scene): WorldHandle {
@@ -203,39 +204,90 @@ function build(scene: THREE.Scene): WorldHandle {
   )
   fire.add(sparks)
 
-  // ── 둘러앉는 통나무 의자, 텐트, 랜턴 ─────────────────────────
-  const benchGeo = new THREE.CylinderGeometry(0.22, 0.22, 1.7, 8)
-  const benchMat = new THREE.MeshLambertMaterial({ color: 0x5b3b25 })
-  for (const a of [0.35, 2.4, 4.4]) {
-    const b = new THREE.Mesh(benchGeo, benchMat)
-    b.position.set(Math.cos(a) * 2.7, 0.22, Math.sin(a) * 2.7)
-    b.rotation.set(0, -a, Math.PI / 2) // 불을 향해 가로로 눕힘
-    scene.add(b)
+  // ── 앉고 누울 수 있는 자리: 캠핑 의자 6개 + 텐트 2동(각 2자리) ──────────
+  const spots: SpotDef[] = []
+  const targets: THREE.Object3D[] = []
+  const hitMat = new THREE.MeshBasicMaterial({ visible: false }) // 탭 판정용 (보이지 않음)
+
+  // 캠핑 의자: 접이식 프레임 + 천. 지오메트리를 합쳐 의자 하나당 메시 2개만 쓴다.
+  const { frame: chairFrame, fabric: chairFabric } = campChairGeometry()
+  const frameMat = new THREE.MeshLambertMaterial({ color: 0x2a2a2e })
+  const hitBox = new THREE.BoxGeometry(1.05, 1.4, 1.05)
+  const CHAIR_COLORS = [0x2f6f5e, 0xc65a3a, 0x3f5f9a, 0xd9a441, 0x7a4f8f, 0x4f8a4a]
+  CHAIR_COLORS.forEach((color, i) => {
+    const a = Math.PI / 2 + (i / CHAIR_COLORS.length) * Math.PI * 2 + 0.25
+    const x = Math.cos(a) * 2.75
+    const z = Math.sin(a) * 2.75
+    const chair = new THREE.Group()
+    chair.add(
+      new THREE.Mesh(chairFrame, frameMat),
+      new THREE.Mesh(chairFabric, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })),
+    )
+    const hit = new THREE.Mesh(hitBox, hitMat)
+    hit.position.y = 0.7
+    hit.userData.spots = [spots.length]
+    chair.add(hit)
+    chair.position.set(x, 0, z)
+    chair.lookAt(0, 0, 0) // 앞(+z)이 모닥불을 향하게
+    scene.add(chair)
+    targets.push(hit)
+    const toFire = new THREE.Vector2(-x, -z).normalize()
+    spots.push({
+      kind: 'sit',
+      x,
+      z,
+      ax: x + toFire.x * 0.8,
+      az: z + toFire.y * 0.8,
+      yaw: Math.atan2(-x, -z),
+    })
+  })
+
+  // 텐트: 앞문이 모닥불을 향하고, 문 앞에 발을 두고 안쪽으로 머리를 두고 눕는다
+  const tentGeo = new THREE.ConeGeometry(1.5, 1.9, 4)
+  const doorGeo = new THREE.CircleGeometry(0.62, 3)
+  const doorMat = new THREE.MeshBasicMaterial({ color: 0x1c130c, transparent: true })
+  const tents: { mat: THREE.MeshLambertMaterial; spots: number[] }[] = []
+  for (const [tx, tz, color] of [
+    [-5.2, -4.2, 0xc9813f],
+    [5.6, -3.6, 0x4f7a8a],
+  ] as const) {
+    const group = new THREE.Group()
+    const mat = new THREE.MeshLambertMaterial({ color, flatShading: true, transparent: true })
+    const tent = new THREE.Mesh(tentGeo, mat)
+    tent.position.y = 0.95
+    tent.rotation.y = Math.PI / 4
+    const door = new THREE.Mesh(doorGeo, doorMat)
+    door.position.set(0, 0.42, 1.04)
+    door.rotation.z = Math.PI / 2
+    group.add(tent, door)
+    group.position.set(tx, 0, tz)
+    group.lookAt(0, 0, 0)
+    group.updateMatrixWorld(true)
+    scene.add(group)
+
+    const yaw = Math.atan2(-tx, -tz) // 발→바깥(모닥불 쪽), 머리→텐트 안쪽
+    const ids: number[] = []
+    for (const side of [-0.36, 0.36]) {
+      const feet = group.localToWorld(new THREE.Vector3(side, 0, 1.45))
+      const near = group.localToWorld(new THREE.Vector3(side, 0, 2.35))
+      ids.push(spots.length)
+      spots.push({ kind: 'lie', x: feet.x, z: feet.z, ax: near.x, az: near.z, yaw })
+    }
+    tent.userData.spots = ids
+    door.userData.spots = ids
+    targets.push(tent, door)
+    tents.push({ mat, spots: ids })
   }
 
-  const tentGroup = new THREE.Group()
-  const tent = new THREE.Mesh(
-    new THREE.ConeGeometry(1.5, 1.9, 4),
-    new THREE.MeshLambertMaterial({ color: 0xc9813f, flatShading: true }),
-  )
-  tent.position.y = 0.95
-  tent.rotation.y = Math.PI / 4
-  const door = new THREE.Mesh(
-    new THREE.CircleGeometry(0.42, 3),
-    new THREE.MeshBasicMaterial({ color: 0x1c130c }),
-  )
-  door.position.set(0, 0.36, 1.07)
-  door.rotation.z = Math.PI / 2
-  tentGroup.add(tent, door)
-  tentGroup.position.set(-5.2, 0, -4.2)
-  tentGroup.lookAt(0, 0, 0)
-  scene.add(tentGroup)
-
-  const tent2 = tentGroup.clone()
-  tent2.position.set(5.6, 0, -3.6)
-  tent2.lookAt(0, 0, 0)
-  ;(tent2.children[0] as THREE.Mesh).material = new THREE.MeshLambertMaterial({ color: 0x4f7a8a, flatShading: true })
-  scene.add(tent2)
+  /** 내가 텐트에 누우면 그 텐트를 반투명하게 해서 안이 보이게 한다 */
+  const focusSpot = (index: number) => {
+    for (const t of tents) {
+      const inside = t.spots.includes(index)
+      t.mat.opacity = inside ? 0.32 : 1
+      t.mat.depthWrite = !inside
+    }
+    doorMat.opacity = tents.some((t) => t.spots.includes(index)) ? 0.3 : 1
+  }
 
   const lantern = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 10, 8),
@@ -251,6 +303,9 @@ function build(scene: THREE.Scene): WorldHandle {
 
   return {
     floor,
+    spots,
+    targets,
+    focusSpot,
     update(dt, t) {
       // 불꽃 일렁임 (겹친 사인파로 불규칙하게)
       for (const f of flames) {
@@ -294,6 +349,42 @@ export const campfire: ThemeDef = {
   spawn: [2.2, 4.5],
   // 낮은 시점 — 모닥불 너머로 산 능선과 별하늘이 보이게
   cameraOffset: [0, 4.8, 11],
+  hint: '의자나 텐트를 눌러 쉬어보세요',
   sound: { ambience: 'campfire', footstep: 'dirt' },
   build,
+}
+
+/**
+ * 접이식 캠핑 의자 (앞쪽 = +z). 프레임과 천을 각각 하나의 지오메트리로 합친다.
+ * 최종 좌석 높이 약 0.57 — Avatar 의 앉기 자세가 이 높이에 맞춰져 있다.
+ */
+function campChairGeometry(): { frame: THREE.BufferGeometry; fabric: THREE.BufferGeometry } {
+  const piece = (g: THREE.BufferGeometry, pos: [number, number, number], rot: [number, number, number] = [0, 0, 0]) =>
+    g.applyMatrix4(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(...pos),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    )
+  const tube = (len: number) => new THREE.CylinderGeometry(0.02, 0.02, len, 5)
+
+  const frame: THREE.BufferGeometry[] = []
+  for (const sx of [-0.29, 0.29]) {
+    // 옆에서 보면 X 자로 교차하는 다리
+    frame.push(piece(tube(0.62), [sx, 0.22, 0], [0.62, 0, 0]))
+    frame.push(piece(tube(0.62), [sx, 0.22, 0], [-0.62, 0, 0]))
+    // 팔걸이
+    frame.push(piece(new THREE.BoxGeometry(0.06, 0.035, 0.44), [sx, 0.62, 0.0]))
+    frame.push(piece(tube(0.2), [sx, 0.52, 0.18]))
+    // 등받이 기둥
+    frame.push(piece(tube(0.62), [sx, 0.7, -0.24], [-0.2, 0, 0]))
+  }
+  const fabric = [
+    piece(new THREE.BoxGeometry(0.58, 0.035, 0.46), [0, 0.42, 0], [0.06, 0, 0]), // 좌석 (뒤로 살짝 처짐)
+    piece(new THREE.BoxGeometry(0.58, 0.48, 0.03), [0, 0.72, -0.25], [-0.2, 0, 0]), // 등받이
+  ]
+  // 아바타 몸보다 넉넉하게 키운다 → 좌석 높이 0.42 × 1.35 ≈ 0.57
+  const S = 1.35
+  return { frame: mergeGeometries(frame)!.scale(S, S, S), fabric: mergeGeometries(fabric)!.scale(S, S, S) }
 }
