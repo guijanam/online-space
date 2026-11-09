@@ -18,6 +18,12 @@
       <div id="status" class="pill" data-kind="wait">함께 쉴 자리를 찾는 중…</div>
       <p id="hint">바닥을 톡 눌러 걸어보세요</p>
       <nav id="actionbar" aria-label="행동"></nav>
+      <button id="switch" type="button" aria-label="공간 바꾸기" hidden>⇄</button>
+      <section id="picker" hidden>
+        <h1>오늘은 어디서 쉴까요?</h1>
+        <p>같은 곳을 고른 동료들과 함께 있게 돼요</p>
+        <div class="cards"></div>
+      </section>
       <div id="rotate"><span>📱</span><p>화면을 세로로 돌려주세요</p></div>
     </main>
     <script type="module" src="/src/main.ts"></script>

@@ -198,3 +198,127 @@ body {
 @keyframes turn {
   50% { transform: rotate(-90deg); }
 }
+
+/* ── 컨셉 선택 ─────────────────────────────────────────────── */
+/* 컨셉을 고르기 전에는 공간 UI를 숨긴다 */
+body:not([data-theme]) #status,
+body:not([data-theme]) #hint,
+body:not([data-theme]) #actionbar {
+  display: none;
+}
+
+#switch {
+  position: absolute;
+  top: calc(var(--safe-top) + 12px);
+  left: 12px;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--glass-dark);
+  color: #fff;
+  font-size: 18px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  touch-action: manipulation;
+}
+#switch[hidden] {
+  display: none;
+}
+body[data-theme] .pill {
+  max-width: calc(100% - 120px);
+}
+
+#picker {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 10px;
+  padding: calc(var(--safe-top) + 24px) 20px calc(var(--safe-bottom) + 24px);
+  background: radial-gradient(120% 80% at 50% 0%, #3b3f7a 0%, #1b1d3a 60%, #121328 100%);
+  color: #fff;
+  transition: opacity 0.28s ease;
+}
+#picker[hidden] {
+  display: none;
+}
+#picker.closing {
+  opacity: 0;
+  pointer-events: none;
+}
+#picker h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+#picker > p {
+  margin-bottom: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+}
+#picker .cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  touch-action: manipulation;
+  transition: transform 0.15s;
+}
+.card:active {
+  transform: scale(0.97);
+}
+.card .art {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22vh;
+  min-height: 110px;
+  max-height: 180px;
+  background: var(--preview);
+}
+.card .art .emoji {
+  font-size: 52px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+}
+.card .text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px 16px;
+}
+.card strong {
+  font-size: 18px;
+}
+.card small {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+.card .badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--ink);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 700;
+}

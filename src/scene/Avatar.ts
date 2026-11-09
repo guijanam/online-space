@@ -70,7 +70,19 @@ const ease = (p: number) => Math.sin(Math.min(1, Math.max(0, p)) * Math.PI)
 /** 0→1 빠르게 올라가고, 끝에서 내려오는 엔벨로프 */
 const hold = (p: number) => Math.min(1, p * 5, (1 - p) * 5)
 
+/** 중심에서 k 보다 가까운 좌표를 원 둘레로 밀어낸다 */
+export function pushOut(x: number, z: number, k: number): { x: number; z: number } {
+  if (k <= 0) return { x, z }
+  const r = Math.hypot(x, z)
+  if (r >= k) return { x, z }
+  if (r < 1e-6) return { x: k, z: 0 }
+  return { x: (x / r) * k, z: (z / r) * k }
+}
+
 export class Avatar {
+  /** 테마의 가운데 장애물 반지름 (모든 아바타 공통) */
+  static keepOut = 0
+
   readonly root = new THREE.Group()
   readonly nickname: string
   private rig = new THREE.Group()
@@ -132,12 +144,14 @@ export class Avatar {
   }
 
   placeAt(x: number, z: number): void {
-    this.root.position.set(x, 0, z)
+    const p = pushOut(x, z, Avatar.keepOut)
+    this.root.position.set(p.x, 0, p.z)
     this.target = null
   }
 
   walkTo(x: number, z: number): void {
-    this.target = new THREE.Vector3(x, 0, z)
+    const p = pushOut(x, z, Avatar.keepOut)
+    this.target = new THREE.Vector3(p.x, 0, p.z)
   }
 
   play(id: ActionId, now: number): void {
@@ -159,8 +173,28 @@ export class Avatar {
       } else {
         walking = true
         const step = Math.min(dist, WALK_SPEED * dt)
-        this.root.position.addScaledVector(d.normalize(), step)
-        const yaw = Math.atan2(d.x, d.z)
+        const p = this.root.position
+        const dir = d.normalize()
+        const k = Avatar.keepOut
+        if (k > 0 && Math.hypot(p.x + dir.x * step, p.z + dir.z * step) < k) {
+          // 가운데(모닥불 등)를 가로지르지 않고 둘레를 따라 돌아간다
+          let tx = -p.z
+          let tz = p.x
+          const len = Math.hypot(tx, tz) || 1
+          tx /= len
+          tz /= len
+          if (tx * dir.x + tz * dir.z < 0) {
+            tx = -tx
+            tz = -tz
+          }
+          dir.set(tx, 0, tz)
+        }
+        p.addScaledVector(dir, step)
+        if (k > 0) {
+          const r = Math.hypot(p.x, p.z)
+          if (r < k && r > 1e-6) p.multiplyScalar(k / r)
+        }
+        const yaw = Math.atan2(dir.x, dir.z)
         let diff = yaw - this.rig.rotation.y
         diff = Math.atan2(Math.sin(diff), Math.cos(diff))
         this.rig.rotation.y += diff * Math.min(1, dt * 10)

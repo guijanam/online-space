@@ -3,15 +3,20 @@ import * as THREE from 'three'
 const TAP_MAX_MOVE_PX = 12
 const TAP_MAX_MS = 450
 
-/** 바닥을 탭하면 그 지점(월드 좌표)을 알려준다. 드래그·길게 누르기는 무시. */
+/**
+ * 화면을 탭하면 땅(y=0 평면) 위의 지점을 알려준다. 드래그·길게 누르기는 무시.
+ * 광장 밖(숲·먼 땅)을 눌러도 그 방향으로 걸어가도록 메시가 아니라 평면과 교차시킨다.
+ * 하늘을 누른 경우는 수평선 바로 앞 지점으로 본다.
+ */
 export function attachPicking(
   el: HTMLElement,
   camera: THREE.Camera,
-  floor: THREE.Object3D,
   onPick: (x: number, z: number) => void,
 ): () => void {
   const ray = new THREE.Raycaster()
   const ndc = new THREE.Vector2()
+  const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+  const hit = new THREE.Vector3()
   let start: { x: number; y: number; t: number; id: number } | null = null
 
   const down = (e: PointerEvent) => {
@@ -27,8 +32,13 @@ export function attachPicking(
     const r = el.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
-    const hit = ray.intersectObject(floor, false)[0]
-    if (hit) onPick(hit.point.x, hit.point.z)
+    const dir = ray.ray.direction
+    if (dir.y < -0.02 && ray.ray.intersectPlane(ground, hit)) {
+      onPick(hit.x, hit.z)
+    } else {
+      // 하늘을 눌렀으면 그 방향으로 멀리 (호출하는 쪽에서 광장 경계로 보정)
+      onPick(camera.position.x + dir.x * 100, camera.position.z + dir.z * 100)
+    }
   }
   const cancel = () => (start = null)
 

@@ -9,11 +9,12 @@ import { SendLimiter } from './net/limits'
 import { Lobby, shouldYield, type Seat } from './net/Lobby'
 import { PeerSync, type PeerHandlers } from './net/PeerSync'
 import { joinRoom, selfId } from './net/strategy'
-import { Avatar } from './scene/Avatar'
+import { Avatar, pushOut } from './scene/Avatar'
 import { attachPicking, TapMarker } from './scene/Picking'
-import { buildWorld } from './scene/World'
+import type { ThemeDef } from './scene/World'
 import { ActionBar } from './ui/ActionBar'
 import { Status } from './ui/Status'
+import { pickTheme } from './ui/ThemePicker'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
 
@@ -39,10 +40,15 @@ function hasWebGL(): boolean {
 if (!hasWebGL()) {
   $('#status').textContent = '이 기기에서는 3D 화면을 열 수 없어요'
 } else {
-  start()
+  void pickTheme($('#picker')).then(start)
 }
 
-function start(): void {
+function start(theme: ThemeDef): void {
+  document.body.dataset.theme = theme.id
+  // 공간 바꾸기: 처음 화면(컨셉 선택)으로 돌아간다
+  $('#switch').hidden = false
+  $('#switch').addEventListener('click', () => location.reload())
+
   // ── 렌더러 / 씬 ───────────────────────────────────────────────────────────
   const stage = $('#stage')
   const renderer = new THREE.WebGLRenderer({ antialias: devicePixelRatio < 2 })
@@ -51,7 +57,8 @@ function start(): void {
 
   const scene = new THREE.Scene()
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100)
-  const world = buildWorld(scene)
+  const world = theme.build(scene)
+  Avatar.keepOut = theme.keepOut
   const marker = new TapMarker()
   scene.add(marker.mesh)
 
@@ -73,7 +80,8 @@ function start(): void {
   const me = new Avatar(selfId, true)
   {
     const a = Math.random() * Math.PI * 2
-    const r = 3 + Math.random() * 3
+    const [rmin, rmax] = theme.spawn
+    const r = rmin + Math.random() * (rmax - rmin)
     me.placeAt(Math.cos(a) * r, Math.sin(a) * r)
   }
   scene.add(me.root)
@@ -95,6 +103,7 @@ function start(): void {
     joinRoom,
     appId: APP_ID,
     password: ROOM_PW,
+    roomPrefix: `${theme.id}-room`,
     capacity: ROOM_CAPACITY,
     settleMs: SETTLE_MS,
     maxRooms: MAX_ROOMS,
@@ -172,7 +181,7 @@ function start(): void {
     )
     sync.start()
     refreshStatus()
-    if (import.meta.env.DEV) console.info(`[space] room-${s.index} 입장 (나: ${me.nickname})`)
+    if (import.meta.env.DEV) console.info(`[space] ${theme.id} room-${s.index} 입장 (나: ${me.nickname})`)
   }
 
   // ── 입력: 탭 이동 (전송은 1초에 1번, 마지막 목적지만) ─────────────────────────
@@ -192,8 +201,9 @@ function start(): void {
     limiter.markMove()
     pendingMove = null
   }
-  attachPicking(renderer.domElement, camera, world.floor, (x, z) => {
-    const p = clampToWorld(x, z)
+  attachPicking(renderer.domElement, camera, (x, z) => {
+    const c = clampToWorld(x, z)
+    const p = pushOut(c.x, c.z, theme.keepOut)
     me.walkTo(p.x, p.z)
     marker.show(p.x, p.z)
     pendingMove = p
@@ -208,7 +218,7 @@ function start(): void {
 
   // ── 렌더 루프 ─────────────────────────────────────────────────────────────
   const look = new THREE.Vector3()
-  const CAM_OFFSET = new THREE.Vector3(0, 12, 12)
+  const CAM_OFFSET = new THREE.Vector3(...theme.cameraOffset)
   const FOLLOW = 0.6
   let last = performance.now()
   const frame = () => {

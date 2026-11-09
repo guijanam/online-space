@@ -5,6 +5,8 @@ export type LobbyOptions = {
   joinRoom: JoinRoom
   appId: string
   password: string
+  /** 방 이름 접두사 — 테마별로 다르게 해서 같은 테마끼리만 만나게 한다 */
+  roomPrefix: string
   capacity: number
   settleMs: number
   maxRooms: number
@@ -33,7 +35,7 @@ export class Lobby {
     const { joinRoom, appId, password, turnConfig, onJoinError } = this.opts
     return joinRoom(
       { appId, password, maxReceiveBytes: 1 << 20, ...(turnConfig ? { turnConfig } : {}) },
-      `room-${index}`,
+      `${this.opts.roomPrefix}-${index}`,
       { onJoinError: (d) => onJoinError?.(d.error) },
     )
   }

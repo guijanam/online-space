@@ -36,8 +36,18 @@ npm run build   # dist/
 | `src/net/Lobby.ts` | 서버 없이 방을 나누는 로직 |
 | `src/net/PeerSync.ts` | 송수신 + 받는 쪽 검증 |
 | `src/net/limits.ts` | 보내는 쪽 쿨타임 / 받는 쪽 도배 필터 |
-| `src/scene/World.ts` | **공간 테마** (컨셉이 정해지면 이 파일만 교체) |
+| `src/scene/World.ts` | 공간 컨셉 목록 (입장할 때 고르는 화면에 나오는 순서) |
+| `src/scene/themes/plaza.ts` | 컨셉: 해 질 녘 광장 |
+| `src/scene/themes/campfire.ts` | 컨셉: 산속 캠핑 (모닥불 불멍) |
+| `src/ui/ThemePicker.ts` | 입장할 때 나오는 컨셉 선택 화면 |
 | `src/scene/Avatar.ts` | 아바타와 행동 애니메이션 |
+
+## 공간 컨셉
+
+입장할 때 컨셉을 고른다. 지난번에 고른 컨셉에는 '지난번' 표시가 붙는다. 왼쪽 위 ⇄ 버튼을 누르면 다시 고를 수 있다.
+컨셉마다 방이 따로라서 **같은 컨셉을 고른 사람끼리만** 만난다.
+
+새 컨셉을 추가하는 방법: `src/scene/themes/`에 `ThemeDef`(이름, 설명, 카드 배경, 가운데 장애물 반지름, 카메라 위치, `build`)를 만들고, `src/scene/World.ts`의 `THEMES`에 넣는다.
 
 ## 도배 방지 방식
 

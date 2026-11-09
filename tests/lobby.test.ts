@@ -42,7 +42,7 @@ function fakeJoin(occupancy: Record<string, number>) {
 }
 
 const opts = (joinRoom: JoinRoom) => ({
-  joinRoom, appId: 't', password: 'x', capacity: 3, settleMs: 0, maxRooms: 10,
+  joinRoom, appId: 't', password: 'x', roomPrefix: 'room', capacity: 3, settleMs: 0, maxRooms: 10,
 })
 
 describe('Lobby.join (방 자동 분할)', () => {
