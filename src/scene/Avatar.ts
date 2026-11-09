@@ -94,6 +94,9 @@ export class Avatar {
   private target: THREE.Vector3 | null = null
   private act: { id: ActionId; t0: number; dur: number } | null = null
   private walkPhase = 0
+  private lastStep = 0
+  /** 한 걸음 디딜 때마다 (발소리용) */
+  onStep: (() => void) | null = null
 
   constructor(
     readonly peerId: string,
@@ -201,6 +204,10 @@ export class Avatar {
       }
     }
     this.walkPhase = walking ? this.walkPhase + dt * 11 : this.walkPhase * 0.85
+    // 팔 흔들기 반 주기 = 한 걸음
+    const stepIdx = Math.floor(this.walkPhase / Math.PI)
+    if (walking && stepIdx !== this.lastStep) this.onStep?.()
+    this.lastStep = stepIdx
 
     // 기본 자세 (숨쉬기 + 걷기)
     const swing = Math.sin(this.walkPhase) * 0.5

@@ -18,8 +18,11 @@ function saveLast(id: string): void {
   }
 }
 
-/** 입장할 때 공간 컨셉을 고르는 화면. 고르면 닫히고 선택한 테마를 돌려준다. */
-export function pickTheme(host: HTMLElement): Promise<ThemeDef> {
+/**
+ * 입장할 때 공간 컨셉을 고르는 화면. 고르면 닫히고 선택한 테마를 돌려준다.
+ * onTap 은 터치 이벤트 안에서 바로 불린다 (소리 켜기처럼 사용자 제스처가 필요한 작업용).
+ */
+export function pickTheme(host: HTMLElement, onTap?: () => void): Promise<ThemeDef> {
   const last = findTheme(loadLast())
   const list = host.querySelector<HTMLElement>('.cards')!
   list.replaceChildren()
@@ -38,6 +41,7 @@ export function pickTheme(host: HTMLElement): Promise<ThemeDef> {
         </span>
         ${theme.id === last?.id ? '<em class="badge">지난번</em>' : ''}`
       card.addEventListener('click', () => {
+        onTap?.()
         saveLast(theme.id)
         host.classList.add('closing')
         setTimeout(() => (host.hidden = true), 280)

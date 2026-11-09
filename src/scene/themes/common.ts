@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { AmbienceId, FootstepKind } from '../../audio/sounds'
 
 export type WorldHandle = {
   /** 탭으로 이동할 수 있는 바닥 (Raycaster 대상) */
@@ -19,6 +20,8 @@ export type ThemeDef = {
   spawn: [number, number]
   /** 바라보는 지점 기준 카메라 위치 */
   cameraOffset: [number, number, number]
+  /** 배경 소리와 발소리 종류 */
+  sound: { ambience: AmbienceId; footstep: FootstepKind }
   build(scene: THREE.Scene): WorldHandle
 }
 

@@ -9,6 +9,7 @@ import { SendLimiter } from './net/limits'
 import { Lobby, shouldYield, type Seat } from './net/Lobby'
 import { PeerSync, type PeerHandlers } from './net/PeerSync'
 import { joinRoom, selfId } from './net/strategy'
+import { AudioEngine } from './audio/AudioEngine'
 import { Avatar, pushOut } from './scene/Avatar'
 import { attachPicking, TapMarker } from './scene/Picking'
 import type { ThemeDef } from './scene/World'
@@ -37,10 +38,29 @@ function hasWebGL(): boolean {
   }
 }
 
+const audio = new AudioEngine()
+
 if (!hasWebGL()) {
   $('#status').textContent = '이 기기에서는 3D 화면을 열 수 없어요'
 } else {
-  void pickTheme($('#picker')).then(start)
+  // 카드를 누르는 순간(사용자 제스처)에 소리를 켤 수 있게 한다
+  void pickTheme($('#picker'), () => audio.unlock()).then(start)
+}
+
+function setupSoundButton(): void {
+  const btn = $<HTMLButtonElement>('#sound')
+  const render = () => {
+    btn.dataset.on = String(audio.enabled)
+    btn.setAttribute('aria-pressed', String(audio.enabled))
+    btn.setAttribute('aria-label', audio.enabled ? '소리 끄기' : '소리 켜기')
+  }
+  btn.addEventListener('click', () => {
+    audio.unlock()
+    audio.setEnabled(!audio.enabled)
+    render()
+  })
+  render()
+  btn.hidden = false
 }
 
 function start(theme: ThemeDef): void {
@@ -48,6 +68,8 @@ function start(theme: ThemeDef): void {
   // 공간 바꾸기: 처음 화면(컨셉 선택)으로 돌아간다
   $('#switch').hidden = false
   $('#switch').addEventListener('click', () => location.reload())
+  setupSoundButton()
+  audio.setAmbience(theme.sound.ambience)
 
   // ── 렌더러 / 씬 ───────────────────────────────────────────────────────────
   const stage = $('#stage')
@@ -85,6 +107,16 @@ function start(theme: ThemeDef): void {
     me.placeAt(Math.cos(a) * r, Math.sin(a) * r)
   }
   scene.add(me.root)
+  me.onStep = () => audio.step(theme.sound.footstep, 1)
+
+  /** 다른 사람 발소리: 가까울수록 크게, 좌우 위치에 따라 왼쪽/오른쪽에서 */
+  const HEAR_DIST = 7
+  const stepOf = (a: Avatar) => () => {
+    const dx = a.position.x - me.position.x
+    const d = Math.hypot(dx, a.position.z - me.position.z)
+    const vol = (1 - d / HEAR_DIST) * 0.45
+    if (vol > 0.03) audio.step(theme.sound.footstep, vol, dx / HEAR_DIST)
+  }
 
   const others = new Map<string, Avatar>()
   const joinedAt = new Map<string, number>()
@@ -137,6 +169,7 @@ function start(theme: ThemeDef): void {
       let a = others.get(id)
       if (!a) {
         a = new Avatar(id)
+        a.onStep = stepOf(a)
         a.placeAt(s.x, s.z)
         scene.add(a.root)
         others.set(id, a)
@@ -231,6 +264,7 @@ function start(theme: ThemeDef): void {
     for (const a of others.values()) a.update(dt, t)
     marker.update(dt)
     bar.update()
+    audio.setListener(me.position.x, me.position.z)
     look.lerp(me.position.clone().multiplyScalar(FOLLOW), Math.min(1, dt * 3))
     camera.position.copy(look).add(CAM_OFFSET)
     camera.lookAt(look.x, 0.8, look.z)
@@ -243,10 +277,12 @@ function start(theme: ThemeDef): void {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       renderer.setAnimationLoop(null)
+      audio.pause()
       void disconnect()
     } else {
       last = performance.now()
       renderer.setAnimationLoop(frame)
+      audio.resume()
       void connect()
     }
   })
@@ -270,6 +306,7 @@ function start(theme: ThemeDef): void {
         get peers() {
           return sync?.peers() ?? []
         },
+        audio,
       },
     })
   }

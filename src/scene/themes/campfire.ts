@@ -294,5 +294,6 @@ export const campfire: ThemeDef = {
   spawn: [2.2, 4.5],
   // 낮은 시점 — 모닥불 너머로 산 능선과 별하늘이 보이게
   cameraOffset: [0, 4.8, 11],
+  sound: { ambience: 'campfire', footstep: 'dirt' },
   build,
 }

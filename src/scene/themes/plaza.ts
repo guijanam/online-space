@@ -107,5 +107,6 @@ export const plaza: ThemeDef = {
   keepOut: 0.5,
   spawn: [3, 6],
   cameraOffset: [0, 12, 12],
+  sound: { ambience: 'dusk', footstep: 'grass' },
   build,
 }
