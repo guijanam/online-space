@@ -1,0 +1,39 @@
+import { z } from 'zod'
+import { ACTION_IDS } from './actions'
+import { WORLD_RADIUS } from './config'
+
+/** 호환되지 않는 변경이 생기면 올린다. 다른 버전의 상태 메시지는 무시된다. */
+export const PROTOCOL_VERSION = 1
+
+/** 이 크기를 넘는 메시지는 받기 전에 거절한다 */
+export const MAX_MESSAGE_BYTES = 256
+
+const LIMIT = WORLD_RADIUS + 1
+const coord = z.number().min(-LIMIT).max(LIMIT)
+
+// z.object 는 알 수 없는 필드를 버린다 → 자유 텍스트를 실을 자리가 없다.
+export const StateMsg = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  x: coord,
+  z: coord,
+  joinedAt: z.number().int().min(0).max(1e13),
+})
+export const MoveMsg = z.object({ x: coord, z: coord })
+export const ActMsg = z.object({ id: z.enum(ACTION_IDS) })
+
+export type StateMsg = z.infer<typeof StateMsg>
+export type MoveMsg = z.infer<typeof MoveMsg>
+export type ActMsg = z.infer<typeof ActMsg>
+
+/** 좌표를 광장 안으로 보정 (원형 경계) */
+export function clampToWorld(x: number, z: number, radius = WORLD_RADIUS - 0.5): { x: number; z: number } {
+  const d = Math.hypot(x, z)
+  if (d <= radius) return { x, z }
+  const k = radius / d
+  return { x: x * k, z: z * k }
+}
+
+/** 전송용 반올림 (메시지 크기 축소) */
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100
+}
