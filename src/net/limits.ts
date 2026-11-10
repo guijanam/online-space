@@ -1,4 +1,5 @@
 import { getAction, type ActionId } from '../actions'
+import { LANTERN_COOLDOWN_MS } from '../config'
 
 type Clock = () => number
 const defaultClock: Clock = () => performance.now()
@@ -73,6 +74,19 @@ export class SendLimiter {
   markMove(): void {
     this.lastMove = this.now()
   }
+
+  private lastLantern = -Infinity
+
+  /** 풍등 쿨타임 남은 시간(ms) */
+  lanternRemaining(): number {
+    return Math.max(0, this.lastLantern + LANTERN_COOLDOWN_MS - this.now())
+  }
+
+  tryLantern(): boolean {
+    if (this.lanternRemaining() > 0) return false
+    this.lastLantern = this.now()
+    return true
+  }
 }
 
 type PeerRecord = {
@@ -80,6 +94,7 @@ type PeerRecord = {
   recent: number[]
   lastMove: number
   lastState: number
+  lastLantern: number
   strikes: number[]
   muted: boolean
 }
@@ -95,7 +110,7 @@ export class ReceiveGuard {
   private rec(id: string): PeerRecord {
     let r = this.peers.get(id)
     if (!r) {
-      r = { lastAction: new Map(), recent: [], lastMove: -Infinity, lastState: -Infinity, strikes: [], muted: false }
+      r = { lastAction: new Map(), recent: [], lastMove: -Infinity, lastState: -Infinity, lastLantern: -Infinity, strikes: [], muted: false }
       this.peers.set(id, r)
     }
     return r
@@ -145,6 +160,19 @@ export class ReceiveGuard {
     const t = this.now()
     if (t - r.lastState < this.cfg.stateMinGapMs) return false
     r.lastState = t
+    return true
+  }
+
+  /** 풍등 — 쿨타임보다 빨리 오면 위반 */
+  allowLantern(peerId: string): boolean {
+    const r = this.rec(peerId)
+    if (r.muted) return false
+    const t = this.now()
+    if (t - r.lastLantern < LANTERN_COOLDOWN_MS - this.cfg.toleranceMs) {
+      this.strike(r, t)
+      return false
+    }
+    r.lastLantern = t
     return true
   }
 

@@ -12,9 +12,10 @@ export function attachPicking(
   el: HTMLElement,
   camera: THREE.Camera,
   opts: {
-    /** 먼저 검사할 물체들 (의자·텐트). userData.spots 에 자리 번호 */
-    targets: THREE.Object3D[]
-    onTarget(spots: number[]): void
+    /** 먼저 검사할 물체들 (의자·텐트·풍등). 매 탭마다 다시 묻는다 */
+    targets: () => THREE.Object3D[]
+    /** 물체를 눌렀을 때. 처리했으면 true (땅 이동은 하지 않음) */
+    onTarget(obj: THREE.Object3D): boolean
     onGround(x: number, z: number): void
   },
 ): () => void {
@@ -37,10 +38,10 @@ export function attachPicking(
     const r = el.getBoundingClientRect()
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
     ray.setFromCamera(ndc, camera)
-    if (opts.targets.length) {
-      for (const h of ray.intersectObjects(opts.targets, false)) {
-        const spots = h.object.userData.spots as number[] | undefined
-        if (spots?.length) return opts.onTarget(spots)
+    const targets = opts.targets()
+    if (targets.length) {
+      for (const h of ray.intersectObjects(targets, false)) {
+        if (opts.onTarget(h.object)) return
       }
     }
     const onPick = opts.onGround

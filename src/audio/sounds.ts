@@ -177,3 +177,12 @@ export function footstep(kit: Kit, kind: FootstepKind, vol: number, pan: number)
     }
   }
 }
+
+/** 풍등을 날릴 때: 불이 붙는 '화르륵' + 은은한 종소리 두 번 */
+export function lanternLaunch(kit: Kit, vol = 1): void {
+  const t = kit.ctx.currentTime + 0.01
+  burst(kit, t, { type: 'bandpass', freq: 700, q: 0.6, dur: 0.9, gain: 0.07 * vol, attack: 0.25 })
+  burst(kit, t + 0.05, { type: 'highpass', freq: 3000, dur: 0.5, gain: 0.02 * vol, attack: 0.15 })
+  tone(kit, t + 0.35, { freq: 784, dur: 2.2, gain: 0.05 * vol, attack: 0.02, vibrato: [5, 3] })
+  tone(kit, t + 0.75, { freq: 1175, dur: 2.6, gain: 0.04 * vol, attack: 0.02, vibrato: [5, 3] })
+}

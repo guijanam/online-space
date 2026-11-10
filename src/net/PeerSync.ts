@@ -1,6 +1,7 @@
 import type { ActionId } from '../actions'
 import { HEARTBEAT_MS } from '../config'
-import { ActMsg, MAX_MESSAGE_BYTES, MoveMsg, PROTOCOL_VERSION, StateMsg, clampToWorld, round2 } from '../protocol'
+import { checkLanternText } from '../lantern/filter'
+import { ActMsg, LanternMsg, MAX_MESSAGE_BYTES, MoveMsg, PROTOCOL_VERSION, StateMsg, clampToWorld, round2 } from '../protocol'
 import { ReceiveGuard } from './limits'
 import type { MessageAction, Room } from './strategy'
 
@@ -10,6 +11,8 @@ export type PeerHandlers = {
   /** seat: 가려는 자리 번호 (-1 = 그냥 걷기) */
   onMove(peerId: string, x: number, z: number, seat: number): void
   onAction(peerId: string, id: ActionId): void
+  /** 풍등 (글은 이미 검사를 통과한 것) */
+  onLantern(peerId: string, text: string): void
   onLeave(peerId: string): void
   /** 도배로 숨김 처리된 피어 */
   onMuted(peerId: string): void
@@ -27,6 +30,7 @@ export class PeerSync {
   private st: MessageAction<Wire>
   private mv: MessageAction<Wire>
   private ac: MessageAction<Wire>
+  private ln: MessageAction<Wire>
   private known = new Set<string>()
   private heartbeat: ReturnType<typeof setInterval> | undefined
   readonly guard = new ReceiveGuard()
@@ -40,10 +44,12 @@ export class PeerSync {
     this.st = room.makeAction<Wire>('st', { onReceive })
     this.mv = room.makeAction<Wire>('mv', { onReceive })
     this.ac = room.makeAction<Wire>('ac', { onReceive })
+    this.ln = room.makeAction<Wire>('ln', { onReceive })
 
     this.st.onMessage = (data, { peerId }) => this.recvState(peerId, data)
     this.mv.onMessage = (data, { peerId }) => this.recvMove(peerId, data)
     this.ac.onMessage = (data, { peerId }) => this.recvAction(peerId, data)
+    this.ln.onMessage = (data, { peerId }) => this.recvLantern(peerId, data)
 
     // 새 피어에게는 내 상태를 바로 보낸다
     room.onPeerJoin = (peerId) => void this.sendState(peerId)
@@ -60,7 +66,7 @@ export class PeerSync {
     clearInterval(this.heartbeat)
     this.room.onPeerJoin = null
     this.room.onPeerLeave = null
-    this.st.onMessage = this.mv.onMessage = this.ac.onMessage = null
+    this.st.onMessage = this.mv.onMessage = this.ac.onMessage = this.ln.onMessage = null
     for (const id of this.known) this.h.onLeave(id)
     this.known.clear()
   }
@@ -82,6 +88,10 @@ export class PeerSync {
 
   sendAction(id: ActionId): void {
     void this.ac.send({ id }).catch(() => {})
+  }
+
+  sendLantern(text: string): void {
+    void this.ln.send({ text }).catch(() => {})
   }
 
   private reject(peerId: string): void {
@@ -123,6 +133,16 @@ export class PeerSync {
     if (!r.success) return this.reject(peerId)
     if (!this.guard.allowAction(peerId, r.data.id)) return void this.checkMuted(peerId)
     this.h.onAction(peerId, r.data.id)
+  }
+
+  private recvLantern(peerId: string, data: unknown): void {
+    if (!this.known.has(peerId)) return
+    const r = LanternMsg.safeParse(data)
+    if (!r.success) return this.reject(peerId)
+    const c = checkLanternText(r.data.text)
+    if (!c.ok) return this.reject(peerId) // 필터를 건너뛴 클라이언트
+    if (!this.guard.allowLantern(peerId)) return void this.checkMuted(peerId)
+    this.h.onLantern(peerId, c.text)
   }
 
   private drop(peerId: string): void {

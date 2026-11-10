@@ -2,7 +2,7 @@ import './style.css'
 import * as THREE from 'three'
 import type { ActionId } from './actions'
 import {
-  APP_ID, MAX_ROOMS, ROOM_CAPACITY, ROOM_OVERFLOW, ROOM_PW, SETTLE_MS, TURN,
+  APP_ID, LANTERN_COOLDOWN_MS, MAX_ROOMS, ROOM_CAPACITY, ROOM_OVERFLOW, ROOM_PW, SETTLE_MS, TURN,
 } from './config'
 import { clampToWorld } from './protocol'
 import { SendLimiter } from './net/limits'
@@ -12,17 +12,20 @@ import { joinRoom, selfId } from './net/strategy'
 import { AudioEngine } from './audio/AudioEngine'
 import { Avatar, pushOut } from './scene/Avatar'
 import { attachPicking, TapMarker } from './scene/Picking'
+import { Lanterns, type Lantern } from './scene/Lanterns'
 import type { ThemeDef } from './scene/World'
 import { ActionBar } from './ui/ActionBar'
 import { Status } from './ui/Status'
 import { Toast } from './ui/Toast'
+import { LanternSheet, confirmHide } from './ui/LanternSheet'
 import { pickTheme } from './ui/ThemePicker'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
 
 // ── 웹뷰 잠금: 길게 누르기 메뉴, 선택, 드래그, 확대, 링크 이동 차단 ──────────────
+const inInput = (e: Event) => (e.target as Element | null)?.closest?.('input, textarea') != null
 for (const type of ['contextmenu', 'selectstart', 'dragstart', 'gesturestart', 'dblclick'] as const) {
-  document.addEventListener(type, (e) => e.preventDefault(), { passive: false })
+  document.addEventListener(type, (e) => inInput(e) || e.preventDefault(), { passive: false })
 }
 document.addEventListener('click', (e) => {
   if ((e.target as Element | null)?.closest?.('a')) e.preventDefault()
@@ -89,6 +92,9 @@ function start(theme: ThemeDef): void {
   $('#hint').textContent = theme.hint
   const marker = new TapMarker()
   scene.add(marker.mesh)
+  const lanterns = new Lanterns(scene)
+  /** 이번 접속 동안 풍등을 가린 사람 */
+  const hiddenLanterns = new Set<string>()
 
   // 세로 화면에서도 광장이 충분히 보이도록 가로 시야각 기준으로 세로 FOV를 잡는다
   const MIN_HFOV = THREE.MathUtils.degToRad(38)
@@ -224,8 +230,18 @@ function start(theme: ThemeDef): void {
       if (a) applyRemote(a, x, z, seatIdx, false)
     },
     onAction: (id, act) => others.get(id)?.play(act, clock()),
+    onLantern(id, text) {
+      const a = others.get(id)
+      if (!a || hiddenLanterns.has(id)) return
+      lanterns.launch(id, a.position.x, a.position.z, text, false)
+      const d = Math.hypot(a.position.x - me.position.x, a.position.z - me.position.z)
+      audio.lantern(Math.max(0.15, 0.5 - d * 0.04))
+    },
     onLeave: removePeer,
-    onMuted: removePeer,
+    onMuted(id) {
+      lanterns.removeOwner(id)
+      removePeer(id)
+    },
   }
 
   async function disconnect(): Promise<void> {
@@ -282,6 +298,7 @@ function start(theme: ThemeDef): void {
   }
 
   function standAndWalk(x: number, z: number): void {
+    endGaze()
     const c = clampToWorld(x, z)
     const p = pushOut(c.x, c.z, theme.keepOut)
     me.walkTo(p.x, p.z)
@@ -292,6 +309,7 @@ function start(theme: ThemeDef): void {
 
   /** 의자/텐트를 눌렀을 때: 빈 자리가 있으면 가서 앉거나 눕는다 */
   const takeSpot = (ids: number[]) => {
+    endGaze()
     if (ids.includes(me.seatIndex)) return
     const taken = new Set([...others.values()].map((a) => a.seatIndex))
     const free = ids.find((i) => !taken.has(i) && spots[i])
@@ -306,11 +324,71 @@ function start(theme: ThemeDef): void {
     queueMove(s.ax, s.az, free)
   }
 
+  const spotTargets = world.targets ?? []
   attachPicking(renderer.domElement, camera, {
-    targets: world.targets ?? [],
-    onTarget: takeSpot,
+    targets: () => [...lanterns.targets(), ...spotTargets],
+    onTarget(obj) {
+      const spotIds = obj.userData.spots as number[] | undefined
+      if (spotIds?.length) {
+        takeSpot(spotIds)
+        return true
+      }
+      const l = lanterns.lanternOf(obj)
+      if (!l) return false
+      if (l.owner !== selfId) {
+        void confirmHide($('#lantern-hide'), l.text).then((yes) => {
+          if (!yes) return
+          hiddenLanterns.add(l.owner)
+          lanterns.removeOwner(l.owner)
+          toast.show('이 분의 풍등을 가렸어요')
+        })
+      }
+      return true
+    },
     onGround: standAndWalk,
   })
+
+  // ── 풍등 ─────────────────────────────────────────────────────────────────
+  const sheet = new LanternSheet($('#lantern-sheet'))
+  const lanternBtn = $<HTMLButtonElement>('#lantern')
+  const lanternSecs = lanternBtn.querySelector<HTMLElement>('.cd b')!
+  lanternBtn.hidden = false
+  /** 내 풍등을 날린 직후 몇 초 동안 카메라가 살짝 올려다본다 */
+  let gaze: { l: Lantern; t: number } | null = null
+  const GAZE_IN = 1.5
+  const GAZE_HOLD = 7
+  const GAZE_OUT = 2.5
+  function endGaze(): void {
+    if (gaze && gaze.t < GAZE_HOLD) gaze.t = GAZE_HOLD
+  }
+  lanternBtn.addEventListener('click', () => {
+    const wait = limiter.lanternRemaining()
+    if (wait > 0) {
+      lanternBtn.classList.remove('nope')
+      void lanternBtn.offsetWidth
+      lanternBtn.classList.add('nope')
+      toast.show(`${Math.ceil(wait / 1000)}초 뒤에 다시 날릴 수 있어요`)
+      return
+    }
+    sheet.open((text) => {
+      if (!limiter.tryLantern()) return false
+      const l = lanterns.launch(selfId, me.position.x, me.position.z, text, true)
+      sync?.sendLantern(text)
+      audio.lantern(1)
+      navigator.vibrate?.(15)
+      gaze = { l, t: 0 }
+      return true
+    })
+  })
+  const updateLanternBtn = () => {
+    const wait = limiter.lanternRemaining()
+    lanternBtn.classList.toggle('locked', wait > 0)
+    if (wait > 0) {
+      lanternBtn.style.setProperty('--p', String(wait / LANTERN_COOLDOWN_MS))
+      const sec = String(Math.ceil(wait / 1000))
+      if (lanternSecs.textContent !== sec) lanternSecs.textContent = sec
+    }
+  }
 
   // ── 입력: 행동 버튼 ───────────────────────────────────────────────────────
   const bar = new ActionBar($('#actionbar'), limiter, (id: ActionId) => {
@@ -332,11 +410,23 @@ function start(theme: ThemeDef): void {
     me.update(dt, t)
     for (const a of others.values()) a.update(dt, t)
     marker.update(dt)
+    lanterns.update(dt)
     bar.update()
+    updateLanternBtn()
     audio.setListener(me.position.x, me.position.z)
     look.lerp(me.position.clone().multiplyScalar(FOLLOW), Math.min(1, dt * 3))
     camera.position.copy(look).add(CAM_OFFSET)
-    camera.lookAt(look.x, 0.8, look.z)
+    let lookY = 0.8
+    if (gaze) {
+      gaze.t += dt
+      const g = gaze.t
+      const w =
+        g < GAZE_IN ? g / GAZE_IN : g < GAZE_HOLD ? 1 : Math.max(0, 1 - (g - GAZE_HOLD) / GAZE_OUT)
+      const h = lanterns.heightOf(gaze.l)
+      if (h === null || w <= 0) gaze = null
+      else lookY += (h - 0.8) * 0.85 * (w * w * (3 - 2 * w))
+    }
+    camera.lookAt(look.x, lookY, look.z)
     renderer.render(scene, camera)
   }
   look.copy(me.position).multiplyScalar(FOLLOW)
@@ -386,6 +476,11 @@ function start(theme: ThemeDef): void {
               : new THREE.Vector3(sp.x, 0.7, sp.z).project(camera)
           const r = renderer.domElement.getBoundingClientRect()
           return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height }
+        },
+        lanterns,
+        /** 쿨타임·필터를 건너뛰고 풍등 전송 (받는 쪽 방어 테스트) */
+        rawLantern(text: string) {
+          sync?.sendLantern(text)
         },
         get mySeat() {
           return me.seatIndex

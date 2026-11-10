@@ -1,5 +1,5 @@
 import { makeNoise, type Kit } from './synth'
-import { AMBIENCES, footstep, type Ambience, type AmbienceId, type FootstepKind } from './sounds'
+import { AMBIENCES, footstep, lanternLaunch, type Ambience, type AmbienceId, type FootstepKind } from './sounds'
 
 const KEY = 'space.sound'
 /** 전체 볼륨 (휴대폰 스피커 기준). 컴프레서가 튀는 소리를 눌러준다. */
@@ -93,6 +93,12 @@ export class AudioEngine {
   step(kind: FootstepKind, vol = 1, pan = 0): void {
     if (!this.kit || !this.isPlaying()) return
     footstep(this.kit, kind, vol, pan)
+  }
+
+  /** 풍등 날리는 소리 (다른 사람 풍등은 vol 을 낮춰서) */
+  lantern(vol = 1): void {
+    if (!this.kit || !this.isPlaying()) return
+    lanternLaunch(this.kit, vol)
   }
 
   private analyser: AnalyserNode | null = null

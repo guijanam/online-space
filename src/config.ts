@@ -28,6 +28,9 @@ export const MAX_ROOMS = 50
 /** 상태 하트비트 주기 (놓친 메시지 보정용) */
 export const HEARTBEAT_MS = 10_000
 
+/** 풍등 쿨타임 — 한 사람이 1분에 한 개 */
+export const LANTERN_COOLDOWN_MS = 60_000
+
 /** 걸어다닐 수 있는 원형 광장 반지름 */
 export const WORLD_RADIUS = 9
 
