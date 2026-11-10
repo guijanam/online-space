@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { getAction, type ActionId } from '../actions'
 import { hueFor, nicknameFor } from '../identity'
 import type { SpotDef } from './themes/common'
+import { MarshmallowRoast } from './MarshmallowRoast'
 
 // 모든 아바타가 지오메트리를 공유한다
 const GEO = {
@@ -94,12 +95,15 @@ export class Avatar {
   private armR = new THREE.Group()
   private emote: THREE.Sprite
   private label: THREE.Sprite
+  private roast = new MarshmallowRoast()
   private target: THREE.Vector3 | null = null
   private act: { id: ActionId; t0: number; dur: number } | null = null
   private walkPhase = 0
   private lastStep = 0
   /** 한 걸음 디딜 때마다 (발소리용) */
   onStep: (() => void) | null = null
+  /** 다른 행동으로 중단되지 않고 끝까지 재생됐을 때만 호출 */
+  onActionEnd: ((id: ActionId) => void) | null = null
 
   /** 차지한(또는 가는 중인) 자리 번호, -1 = 서 있음 */
   seatIndex = -1
@@ -133,7 +137,7 @@ export class Avatar {
       arm.add(m)
       arm.position.set(x, 1.0, 0)
     }
-    this.rig.add(body, this.head, this.armL, this.armR)
+    this.rig.add(body, this.head, this.armL, this.armR, this.roast.root)
     this.rig.rotation.order = 'YXZ' // 방향(yaw)을 먼저 돌리고, 그 기준으로 숙이기(x)
     this.root.add(this.rig)
 
@@ -153,6 +157,10 @@ export class Avatar {
 
   get position(): THREE.Vector3 {
     return this.root.position
+  }
+
+  get isSitting(): boolean {
+    return this.seated && this.poseKind === 'sit'
   }
 
   /** 현재 목적지 (없으면 현재 위치) — 상태 동기화용 */
@@ -280,6 +288,7 @@ export class Avatar {
     const swing = Math.sin(this.walkPhase) * 0.5
     let armL = -0.12
     let armR = 0.12
+    let armRX = -swing
     let lift = Math.abs(Math.sin(this.walkPhase)) * 0.08
     let tiltX = 0
     let tiltZ = 0
@@ -287,12 +296,15 @@ export class Avatar {
     let stretch = 1 + Math.sin(t * 2 + this.peerId.length) * 0.015
 
     // 행동 애니메이션
+    this.roast.hide()
     if (this.act) {
       const el = t - this.act.t0
       const p = el / this.act.dur
       if (p >= 1) {
+        const finished = this.act.id
         this.act = null
         this.emote.visible = false
+        this.onActionEnd?.(finished)
       } else {
         const e = hold(p)
         switch (this.act.id) {
@@ -318,6 +330,11 @@ export class Avatar {
           case 'sleep':
             headZ = 0.3 * e
             lift += Math.sin(el * 2) * 0.02 * e
+            break
+          case 'roast':
+            armR = THREE.MathUtils.lerp(armR, 0.05, e)
+            armRX = THREE.MathUtils.lerp(armRX, -1.15, e)
+            this.roast.update(p, t)
             break
         }
         // 이모지: 떠오르며 사라짐
@@ -360,7 +377,7 @@ export class Avatar {
     this.armL.rotation.z = armL
     this.armR.rotation.z = armR
     this.armL.rotation.x = swing
-    this.armR.rotation.x = -swing
+    this.armR.rotation.x = armRX
     this.rig.position.y = lift
     this.rig.rotation.x = tiltX
     this.rig.rotation.z = tiltZ
@@ -372,6 +389,7 @@ export class Avatar {
     this.label.material.map?.dispose()
     this.label.material.dispose()
     this.emote.material.dispose()
+    this.roast.dispose()
     this.root.removeFromParent()
   }
 }

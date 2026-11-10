@@ -1,7 +1,7 @@
 import { ACTIONS, type ActionId } from '../actions'
 import type { SendLimiter } from '../net/limits'
 
-/** 하단 행동 버튼. 쿨타임 동안 잠기고 원형 게이지로 남은 시간을 보여준다. */
+/** 하단 공용 행동 버튼. 쿨타임 동안 잠기고 원형 게이지로 남은 시간을 보여준다. */
 export class ActionBar {
   private buttons = new Map<ActionId, { el: HTMLButtonElement; secs: HTMLElement }>()
 
@@ -11,6 +11,7 @@ export class ActionBar {
     private onAct: (id: ActionId) => void,
   ) {
     for (const a of ACTIONS) {
+      if ('theme' in a) continue
       const el = document.createElement('button')
       el.type = 'button'
       el.className = 'act'

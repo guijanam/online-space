@@ -342,14 +342,14 @@ export const campfire: ThemeDef = {
   id: 'campfire',
   name: '산속 캠핑',
   emoji: '🔥',
-  description: '별빛 아래 모닥불 앞에 둘러앉아 불멍',
+  description: '별빛 아래 모닥불에서 마시멜로와 불멍',
   preview:
     'radial-gradient(circle at 50% 78%,#ffb35c 0,#ff6a1f 7%,rgba(255,106,31,0) 26%),linear-gradient(180deg,#05081a 0%,#241f47 55%,#1b2418 56%,#34452b 100%)',
   keepOut: 1.25,
   spawn: [2.2, 4.5],
   // 낮은 시점 — 모닥불 너머로 산 능선과 별하늘이 보이게
   cameraOffset: [0, 4.8, 11],
-  hint: '의자나 텐트를 눌러 쉬어보세요',
+  hint: '의자에 앉아 마시멜로를 구워보세요',
   sound: { ambience: 'campfire', footstep: 'dirt' },
   build,
 }

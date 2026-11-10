@@ -10,6 +10,10 @@ describe('protocol', () => {
     expect(r.data).toEqual({ id: 'wave' })
   })
 
+  it('캠핑의 마시멜로 굽기 행동을 전달한다', () => {
+    expect(ActMsg.safeParse({ id: 'roast' })).toEqual({ success: true, data: { id: 'roast' } })
+  })
+
   it('정의되지 않은 행동은 거절한다', () => {
     expect(ActMsg.safeParse({ id: 'dance' }).success).toBe(false)
     expect(ActMsg.safeParse({ id: 123 }).success).toBe(false)

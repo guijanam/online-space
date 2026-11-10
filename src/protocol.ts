@@ -3,7 +3,7 @@ import { ACTION_IDS } from './actions'
 import { WORLD_RADIUS } from './config'
 
 /** 호환되지 않는 변경이 생기면 올린다. 다른 버전의 상태 메시지는 무시된다. */
-export const PROTOCOL_VERSION = 1
+export const PROTOCOL_VERSION = 2
 
 /** 이 크기를 넘는 메시지는 받기 전에 거절한다 */
 export const MAX_MESSAGE_BYTES = 256

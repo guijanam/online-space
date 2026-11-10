@@ -432,10 +432,20 @@ body[data-theme] .pill {
 .fab.nope {
   animation: nope 0.32s;
 }
+#roast {
+  right: auto;
+  left: 14px;
+  background: radial-gradient(circle at 50% 60%, #fff8df 0%, #edc68f 68%, #b97843 100%);
+  color: #56351f;
+  box-shadow: 0 0 18px rgba(255, 220, 165, 0.35), 0 6px 18px rgba(20, 16, 40, 0.3);
+}
+#roast .label {
+  font-size: 10px;
+}
 body:not([data-theme]) .fab {
   display: none;
 }
-/* 토스트·안내가 풍등 버튼과 겹치지 않게 */
+/* 토스트·안내가 양쪽 버튼과 겹치지 않게 */
 body[data-theme] #toast {
   max-width: calc(100% - 150px);
 }

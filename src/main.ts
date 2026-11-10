@@ -1,6 +1,6 @@
 import './style.css'
 import * as THREE from 'three'
-import type { ActionId } from './actions'
+import { getAction, type ActionId } from './actions'
 import {
   APP_ID, LANTERN_COOLDOWN_MS, MAX_ROOMS, ROOM_CAPACITY, ROOM_OVERFLOW, ROOM_PW, SETTLE_MS, TURN,
 } from './config'
@@ -390,6 +390,40 @@ function start(theme: ThemeDef): void {
     }
   }
 
+  // ── 캠핑: 마시멜로 굽기 ───────────────────────────────────────────────────
+  const roastBtn = $<HTMLButtonElement>('#roast')
+  const roastSecs = roastBtn.querySelector<HTMLElement>('.cd b')!
+  const roast = getAction('roast')
+  if (theme.id === 'campfire') {
+    roastBtn.hidden = false
+    roastBtn.addEventListener('click', () => {
+      if (!me.isSitting) {
+        toast.show('모닥불 앞 의자에 앉아서 구워보세요')
+      } else if (limiter.tryAct('roast')) {
+        me.play('roast', clock())
+        sync?.sendAction('roast')
+        navigator.vibrate?.(12)
+        return
+      }
+      roastBtn.classList.remove('nope')
+      void roastBtn.offsetWidth
+      roastBtn.classList.add('nope')
+    })
+    me.onActionEnd = (id) => {
+      if (id === 'roast') toast.show('노릇노릇하게 구워졌어요. 맛있게 드세요!')
+    }
+  }
+  const updateRoastBtn = () => {
+    const { remainingMs } = limiter.actionCooldown('roast')
+    const wait = Math.max(remainingMs, limiter.globalRemaining())
+    roastBtn.classList.toggle('locked', wait > 0)
+    if (wait > 0) {
+      roastBtn.style.setProperty('--p', String(remainingMs >= wait ? remainingMs / roast.cooldownMs : 1))
+      const sec = String(Math.ceil(wait / 1000))
+      if (roastSecs.textContent !== sec) roastSecs.textContent = sec
+    }
+  }
+
   // ── 입력: 행동 버튼 ───────────────────────────────────────────────────────
   const bar = new ActionBar($('#actionbar'), limiter, (id: ActionId) => {
     me.play(id, clock())
@@ -413,6 +447,7 @@ function start(theme: ThemeDef): void {
     lanterns.update(dt)
     bar.update()
     updateLanternBtn()
+    updateRoastBtn()
     audio.setListener(me.position.x, me.position.z)
     look.lerp(me.position.clone().multiplyScalar(FOLLOW), Math.min(1, dt * 3))
     camera.position.copy(look).add(CAM_OFFSET)

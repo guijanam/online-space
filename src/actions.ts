@@ -6,6 +6,7 @@ export const ACTIONS = [
   { id: 'stretch', emoji: '🙆', label: '기지개', cooldownMs: 8_000, durationMs: 2_400 },
   { id: 'heart', emoji: '💗', label: '하트', cooldownMs: 10_000, durationMs: 2_200 },
   { id: 'sleep', emoji: '💤', label: '졸음', cooldownMs: 30_000, durationMs: 5_000 },
+  { id: 'roast', emoji: '🍢', label: '마시멜로', cooldownMs: 10_000, durationMs: 10_000, theme: 'campfire' },
 ] as const
 
 export type ActionDef = (typeof ACTIONS)[number]
