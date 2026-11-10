@@ -3,6 +3,7 @@ import {
   SURVIVAL_SECONDS,
   applyUpgrade,
   createGame,
+  pickEnemyKind,
   spawnEnemy,
   updateGame,
   upgradeChoices,
@@ -105,6 +106,30 @@ describe('지하철 퇴치대 엔진', () => {
     updateGame(state, { x: 0, y: 0 }, 0.02)
     expect(state.status).toBe('won')
     expect(state.time).toBe(SURVIVAL_SECONDS)
+  })
+
+  it('빌런 종류는 시간이 지나야 해금된다', () => {
+    const rolls = Array.from({ length: 100 }, (_, i) => i / 100)
+    const kindsAt = (time: number) => new Set(rolls.map((roll) => pickEnemyKind(time, roll)))
+    expect([...kindsAt(5)]).toEqual(['heckler'])
+    expect(kindsAt(20).has('sprinter')).toBe(true)
+    expect(kindsAt(20).has('youtuber')).toBe(false)
+    expect(kindsAt(30).has('youtuber')).toBe(true)
+    expect(kindsAt(40).has('urinator')).toBe(false)
+    const late = kindsAt(50)
+    for (const kind of ['heckler', 'sprinter', 'youtuber', 'urinator', 'blocker'] as const) expect(late.has(kind)).toBe(true)
+    expect(late.has('boss')).toBe(false)
+  })
+
+  it('빌런은 주인공 쪽을 바라본다', () => {
+    const state = runningGame()
+    const left = spawnEnemy(state, 'youtuber', 50, 350)
+    const right = spawnEnemy(state, 'urinator', 350, 350)
+    expect(left.facing).toBe(1)
+    expect(right.facing).toBe(-1)
+    expect(right.damage).toBeGreaterThan(left.damage)
+    updateGame(state, { x: -1, y: 0 }, 0.016)
+    expect(state.player.facing).toBe(-1)
   })
 
   it('강화 선택지는 세 개다', () => {

@@ -8,6 +8,16 @@ import {
   type Enemy,
   type SubwayState,
 } from './engine'
+import { VILLAIN_NAMES, loadSprites, type SpriteKey } from './sprites'
+
+const ENEMY_COLORS: Record<Enemy['kind'], string> = {
+  heckler: '#b65757',
+  sprinter: '#dc8650',
+  youtuber: '#d9534f',
+  urinator: '#b8a33f',
+  blocker: '#875b9e',
+  boss: '#a84862',
+}
 
 const BEST_KILLS_KEY = 'subway.bestKills'
 const BEST_TIME_KEY = 'subway.bestTime'
@@ -54,6 +64,7 @@ export class SubwayGame {
   private stickPointer: number | null = null
   private lastFrame = 0
   private shownStatus = this.state.status
+  private sprites = loadSprites()
 
   constructor(private host: HTMLElement) {
     const q = <T extends HTMLElement>(selector: string) => host.querySelector<T>(selector)!
@@ -282,7 +293,7 @@ export class SubwayGame {
       ctx.fillStyle = '#ffd4d4'
       ctx.font = '700 13px sans-serif'
       ctx.textAlign = 'center'
-      ctx.fillText('⚠ 강한 빌런이 접근하고 있습니다', w / 2, 146)
+      ctx.fillText(`⚠ ${VILLAIN_NAMES.boss}이 접근하고 있습니다`, w / 2, 146)
     }
     if (this.state.invincible > 0.42) {
       ctx.strokeStyle = 'rgba(255,75,75,0.45)'
@@ -319,6 +330,12 @@ export class SubwayGame {
     ctx.beginPath()
     ctx.arc(player.x, player.y, player.r + 7, 0, Math.PI * 2)
     ctx.fill()
+    const moving = Math.hypot(this.stick.x, this.stick.y) > 0.1 || this.keys.size > 0
+    const bob = moving ? Math.sin(this.state.time * 14) * 1.5 : 0
+    if (this.drawSprite('player', player.x, player.y + bob, player.r * 2.6, player.facing)) {
+      ctx.restore()
+      return
+    }
     ctx.fillStyle = '#62bfe2'
     ctx.beginPath()
     ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2)
@@ -340,11 +357,47 @@ export class SubwayGame {
 
   private drawEnemy(enemy: Enemy): void {
     const ctx = this.ctx
-    const color = enemy.kind === 'boss' ? '#a84862' : enemy.kind === 'blocker' ? '#875b9e' : enemy.kind === 'sprinter' ? '#dc8650' : '#b65757'
     ctx.fillStyle = 'rgba(0,0,0,0.22)'
     ctx.beginPath()
     ctx.ellipse(enemy.x, enemy.y + enemy.r * 0.8, enemy.r, enemy.r * 0.45, 0, 0, Math.PI * 2)
     ctx.fill()
+    const drewSprite = this.drawSprite(enemy.kind, enemy.x, enemy.y, enemy.r * 2.4, enemy.facing)
+    if (!drewSprite) this.drawEnemyShape(enemy)
+    const top = enemy.y - (drewSprite ? enemy.r * 1.2 : enemy.r)
+    if (enemy.kind === 'boss') {
+      ctx.fillStyle = '#ffd77b'
+      ctx.font = '700 11px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(VILLAIN_NAMES.boss, enemy.x, top - 12)
+    }
+    if (enemy.hp < enemy.maxHp || enemy.kind === 'boss') {
+      const width = enemy.r * 2
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'
+      ctx.fillRect(enemy.x - width / 2, top - 7, width, 4)
+      ctx.fillStyle = '#ef8a8a'
+      ctx.fillRect(enemy.x - width / 2, top - 7, width * Math.max(0, enemy.hp / enemy.maxHp), 4)
+    }
+  }
+
+  /** 이미지가 준비돼 있으면 (x, y) 중심에 size 크기로 그리고 true를 돌려준다. */
+  private drawSprite(key: SpriteKey, x: number, y: number, size: number, facing: 1 | -1): boolean {
+    const image = this.sprites.get(key)
+    if (!image) return false
+    const ctx = this.ctx
+    const scale = size / Math.max(image.naturalWidth, image.naturalHeight)
+    const w = image.naturalWidth * scale
+    const h = image.naturalHeight * scale
+    ctx.save()
+    ctx.translate(x, y)
+    ctx.scale(facing, 1)
+    ctx.drawImage(image, -w / 2, -h / 2, w, h)
+    ctx.restore()
+    return true
+  }
+
+  private drawEnemyShape(enemy: Enemy): void {
+    const ctx = this.ctx
+    const color = ENEMY_COLORS[enemy.kind]
     ctx.fillStyle = color
     ctx.beginPath()
     ctx.arc(enemy.x, enemy.y, enemy.r, 0, Math.PI * 2)
@@ -363,19 +416,6 @@ export class SubwayGame {
     ctx.stroke()
     ctx.fillStyle = '#321d25'
     ctx.fillRect(enemy.x - 4, enemy.y + 5, 8, 2)
-    if (enemy.kind === 'boss') {
-      ctx.fillStyle = '#ffd77b'
-      ctx.font = '700 11px sans-serif'
-      ctx.textAlign = 'center'
-      ctx.fillText('막차 빌런', enemy.x, enemy.y - enemy.r - 12)
-    }
-    if (enemy.hp < enemy.maxHp || enemy.kind === 'boss') {
-      const width = enemy.r * 2
-      ctx.fillStyle = 'rgba(0,0,0,0.5)'
-      ctx.fillRect(enemy.x - width / 2, enemy.y - enemy.r - 7, width, 4)
-      ctx.fillStyle = '#ef8a8a'
-      ctx.fillRect(enemy.x - width / 2, enemy.y - enemy.r - 7, width * Math.max(0, enemy.hp / enemy.maxHp), 4)
-    }
   }
 
   private bindControls(): void {

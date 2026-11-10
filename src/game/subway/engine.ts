@@ -1,7 +1,8 @@
 export const SURVIVAL_SECONDS = 180
 
 export type GameStatus = 'idle' | 'running' | 'levelup' | 'paused' | 'over' | 'won'
-export type EnemyKind = 'heckler' | 'sprinter' | 'blocker' | 'boss'
+export type EnemyKind = 'heckler' | 'sprinter' | 'youtuber' | 'urinator' | 'blocker' | 'boss'
+export type Facing = 1 | -1
 export type UpgradeId = 'rapid' | 'damage' | 'speed' | 'health' | 'multi' | 'pierce' | 'magnet'
 
 export type Player = {
@@ -17,6 +18,7 @@ export type Player = {
   multiShot: number
   pierce: number
   magnet: number
+  facing: Facing
 }
 
 export type Enemy = {
@@ -30,6 +32,7 @@ export type Enemy = {
   speed: number
   damage: number
   xp: number
+  facing: Facing
 }
 
 export type Bullet = {
@@ -77,11 +80,31 @@ export const UPGRADES: { id: UpgradeId; emoji: string; name: string; description
   { id: 'magnet', emoji: '🧲', name: '경험치 수거', description: '수거 범위 +45%' },
 ]
 
-const ENEMY_STATS: Record<EnemyKind, Omit<Enemy, 'id' | 'kind' | 'x' | 'y' | 'hp' | 'maxHp'>> = {
-  heckler: { r: 15, speed: 55, damage: 10, xp: 5 },
-  sprinter: { r: 11, speed: 94, damage: 8, xp: 6 },
-  blocker: { r: 21, speed: 34, damage: 18, xp: 12 },
-  boss: { r: 34, speed: 29, damage: 25, xp: 70 },
+export const ENEMY_STATS: Record<EnemyKind, Omit<Enemy, 'id' | 'kind' | 'x' | 'y' | 'hp' | 'maxHp' | 'facing'> & { baseHp: number }> = {
+  heckler: { r: 15, speed: 55, damage: 10, xp: 5, baseHp: 42 },
+  sprinter: { r: 11, speed: 94, damage: 8, xp: 6, baseHp: 28 },
+  youtuber: { r: 16, speed: 62, damage: 10, xp: 8, baseHp: 60 },
+  urinator: { r: 15, speed: 50, damage: 16, xp: 9, baseHp: 70 },
+  blocker: { r: 21, speed: 34, damage: 18, xp: 12, baseHp: 135 },
+  boss: { r: 34, speed: 29, damage: 25, xp: 70, baseHp: 1100 },
+}
+
+/** 시간이 지나면 해금되는 빌런과 등장 확률. 해금되지 않은 몫은 기본 빌런(heckler)이 차지한다. */
+const SPAWN_TABLE: { kind: EnemyKind; after: number; chance: number }[] = [
+  { kind: 'blocker', after: 35, chance: 0.14 },
+  { kind: 'urinator', after: 45, chance: 0.12 },
+  { kind: 'youtuber', after: 25, chance: 0.14 },
+  { kind: 'sprinter', after: 12, chance: 0.28 },
+]
+
+export function pickEnemyKind(time: number, roll: number): EnemyKind {
+  let edge = 0
+  for (const entry of SPAWN_TABLE) {
+    if (time <= entry.after) continue
+    edge += entry.chance
+    if (roll < edge) return entry.kind
+  }
+  return 'heckler'
 }
 
 export function createGame(width: number, height: number, random = Math.random): SubwayState {
@@ -103,6 +126,7 @@ export function createGame(width: number, height: number, random = Math.random):
       multiShot: 1,
       pierce: 0,
       magnet: 95,
+      facing: 1,
     },
     enemies: [],
     bullets: [],
@@ -122,15 +146,14 @@ export function createGame(width: number, height: number, random = Math.random):
 
 export function spawnEnemy(state: SubwayState, forcedKind?: EnemyKind, x?: number, y?: number): Enemy {
   const roll = state.random()
-  const kind: EnemyKind =
-    forcedKind ?? (state.time > 35 && roll < 0.18 ? 'blocker' : state.time > 12 && roll < 0.48 ? 'sprinter' : 'heckler')
-  const base = ENEMY_STATS[kind]
+  const kind: EnemyKind = forcedKind ?? pickEnemyKind(state.time, roll)
+  const { baseHp, ...base } = ENEMY_STATS[kind]
   const edge = Math.floor(state.random() * 4)
   const px = x ?? (edge === 0 ? -base.r : edge === 1 ? state.width + base.r : state.random() * state.width)
   const py = y ?? (edge >= 2 ? (edge === 2 ? -base.r : state.height + base.r) : state.random() * state.height)
-  const baseHp = kind === 'boss' ? 1100 : kind === 'blocker' ? 135 : kind === 'sprinter' ? 28 : 42
   const hp = Math.round(baseHp * (kind === 'boss' ? 1 : 1 + state.time / 120))
-  const enemy: Enemy = { id: state.nextId++, kind, x: px, y: py, ...base, hp, maxHp: hp }
+  const facing: Facing = state.player.x >= px ? 1 : -1
+  const enemy: Enemy = { id: state.nextId++, kind, x: px, y: py, ...base, hp, maxHp: hp, facing }
   state.enemies.push(enemy)
   return enemy
 }
@@ -187,6 +210,8 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
   const length = Math.hypot(input.x, input.y)
   const nx = length > 1 ? input.x / length : input.x
   const ny = length > 1 ? input.y / length : input.y
+  if (nx > 0.05) player.facing = 1
+  else if (nx < -0.05) player.facing = -1
   player.x = Math.max(player.r, Math.min(state.width - player.r, player.x + nx * player.speed * dt))
   player.y = Math.max(player.r, Math.min(state.height - player.r, player.y + ny * player.speed * dt))
 
@@ -213,6 +238,7 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
     const d = Math.hypot(dx, dy) || 1
     enemy.x += (dx / d) * enemy.speed * dt
     enemy.y += (dy / d) * enemy.speed * dt
+    if (Math.abs(dx) > 2) enemy.facing = dx > 0 ? 1 : -1
   }
   for (let i = 0; i < state.enemies.length; i++) {
     for (let j = i + 1; j < state.enemies.length; j++) {
