@@ -46,6 +46,29 @@
         <p>같은 곳을 고른 동료들과 함께 있게 돼요</p>
         <div class="cards"></div>
       </section>
+      <section id="star-game" hidden aria-label="별 받기 게임">
+        <div class="game-stars" aria-hidden="true"></div>
+        <header class="game-hud">
+          <div><small>현재 점수</small><strong id="game-score">0</strong></div>
+          <div class="game-time"><small>남은 시간</small><strong><span id="game-time">30</span><small>초</small></strong></div>
+          <div><small>최고 점수</small><strong id="game-best">0</strong></div>
+        </header>
+        <p id="game-connection">함께할 친구를 찾는 중…</p>
+        <div id="game-field" aria-label="별이 떨어지는 게임 화면"></div>
+        <aside class="game-board" aria-label="실시간 순위">
+          <div class="game-board-title"><strong>실시간 순위</strong><span>현재 라운드</span></div>
+          <ol id="game-rank"></ol>
+        </aside>
+        <div id="game-overlay" class="game-overlay">
+          <div class="game-card">
+            <span class="game-logo" aria-hidden="true">🌟</span>
+            <h2 id="game-title">별 받기</h2>
+            <p id="game-message">30초 동안 떨어지는 별을 눌러보세요.<br />별 +10점 · 폭탄 −20점</p>
+            <button id="game-start" type="button">게임 시작</button>
+            <small>같은 방 친구와 실시간으로 점수를 나눠요</small>
+          </div>
+        </div>
+      </section>
       <div id="rotate"><span>📱</span><p>화면을 세로로 돌려주세요</p></div>
     </main>
     <script type="module" src="/src/main.ts"></script>

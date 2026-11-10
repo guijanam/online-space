@@ -26,11 +26,20 @@ export const MoveMsg = z.object({ x: coord, z: coord, seat })
 export const ActMsg = z.object({ id: z.enum(ACTION_IDS) })
 /** 풍등: 짧은 글 하나. 글 내용은 받는 쪽에서 lantern/filter.ts 로 다시 검사한다 */
 export const LanternMsg = z.object({ text: z.string().min(1).max(80) })
+export const GameStateMsg = z.object({
+  v: z.literal(PROTOCOL_VERSION),
+  joinedAt: z.number().int().min(0).max(1e13),
+  round: z.number().int().min(0).max(1e6),
+  score: z.number().int().min(0).max(1e6),
+  best: z.number().int().min(0).max(1e6),
+  playing: z.boolean(),
+})
 
 export type StateMsg = z.infer<typeof StateMsg>
 export type MoveMsg = z.infer<typeof MoveMsg>
 export type ActMsg = z.infer<typeof ActMsg>
 export type LanternMsg = z.infer<typeof LanternMsg>
+export type GameStateMsg = z.infer<typeof GameStateMsg>
 
 /** 좌표를 광장 안으로 보정 (원형 경계) */
 export function clampToWorld(x: number, z: number, radius = WORLD_RADIUS - 0.5): { x: number; z: number } {

@@ -26,13 +26,17 @@ export type WorldHandle = {
   focusSpot?(index: number): void
 }
 
-export type ThemeDef = {
+type ThemeBase = {
   id: string
   name: string
   emoji: string
   description: string
   /** 선택 카드 배경 (CSS) */
   preview: string
+}
+
+export type WorldThemeDef = ThemeBase & {
+  kind?: 'world'
   /** 가운데 장애물(등불·모닥불) 반지름 — 아바타가 이 안으로 들어가지 않는다 */
   keepOut: number
   /** 처음 나타나는 위치 (중심으로부터 거리 범위) */
@@ -45,6 +49,13 @@ export type ThemeDef = {
   sound: { ambience: AmbienceId; footstep: FootstepKind }
   build(scene: THREE.Scene): WorldHandle
 }
+
+export type GameThemeDef = ThemeBase & {
+  kind: 'game'
+  game: 'star-catch'
+}
+
+export type ThemeDef = WorldThemeDef | GameThemeDef
 
 /** 세로 그라데이션 하늘 */
 export function skyTexture(stops: [number, string][]): THREE.Texture {

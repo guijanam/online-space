@@ -19,6 +19,7 @@ import { Status } from './ui/Status'
 import { Toast } from './ui/Toast'
 import { LanternSheet, confirmHide } from './ui/LanternSheet'
 import { pickTheme } from './ui/ThemePicker'
+import { StarCatchGame } from './game/StarCatchGame'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
 
@@ -44,12 +45,8 @@ function hasWebGL(): boolean {
 
 const audio = new AudioEngine()
 
-if (!hasWebGL()) {
-  $('#status').textContent = '이 기기에서는 3D 화면을 열 수 없어요'
-} else {
-  // 카드를 누르는 순간(사용자 제스처)에 소리를 켤 수 있게 한다
-  void pickTheme($('#picker'), () => audio.unlock()).then(start)
-}
+// 카드를 누르는 순간(사용자 제스처)에 소리를 켤 수 있게 한다
+void pickTheme($('#picker'), () => audio.unlock()).then(start)
 
 function setupSoundButton(): void {
   const btn = $<HTMLButtonElement>('#sound')
@@ -72,6 +69,14 @@ function start(theme: ThemeDef): void {
   // 공간 바꾸기: 처음 화면(컨셉 선택)으로 돌아간다
   $('#switch').hidden = false
   $('#switch').addEventListener('click', () => location.reload())
+  if (theme.kind === 'game') {
+    new StarCatchGame($('#star-game')).start()
+    return
+  }
+  if (!hasWebGL()) {
+    $('#status').textContent = '이 기기에서는 3D 화면을 열 수 없어요'
+    return
+  }
   setupSoundButton()
   audio.setAmbience(theme.sound.ambience)
 
@@ -300,7 +305,7 @@ function start(theme: ThemeDef): void {
   function standAndWalk(x: number, z: number): void {
     endGaze()
     const c = clampToWorld(x, z)
-    const p = pushOut(c.x, c.z, theme.keepOut)
+    const p = pushOut(c.x, c.z, Avatar.keepOut)
     me.walkTo(p.x, p.z)
     world.focusSpot?.(-1)
     marker.show(p.x, p.z)

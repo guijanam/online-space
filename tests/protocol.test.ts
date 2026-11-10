@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ActMsg, MoveMsg, PROTOCOL_VERSION, StateMsg, clampToWorld } from '../src/protocol'
+import { ActMsg, GameStateMsg, MoveMsg, PROTOCOL_VERSION, StateMsg, clampToWorld } from '../src/protocol'
 import { hueFor, nicknameFor } from '../src/identity'
 import { WORLD_RADIUS } from '../src/config'
 
@@ -40,6 +40,14 @@ describe('protocol', () => {
     expect(MoveMsg.safeParse({ x: 0, z: 0, seat: 99 }).success).toBe(false)
     expect(MoveMsg.safeParse({ x: 0, z: 0, seat: 1.5 }).success).toBe(false)
     expect(MoveMsg.safeParse({ x: 0, z: 0, seat: '의자' }).success).toBe(false)
+  })
+
+  it('게임 점수는 정수 범위와 프로토콜 버전을 검사한다', () => {
+    const ok = { v: PROTOCOL_VERSION, joinedAt: Date.now(), round: 1, score: 30, best: 80, playing: true }
+    expect(GameStateMsg.safeParse(ok).success).toBe(true)
+    expect(GameStateMsg.safeParse({ ...ok, score: -10 }).success).toBe(false)
+    expect(GameStateMsg.safeParse({ ...ok, score: 1.5 }).success).toBe(false)
+    expect(GameStateMsg.safeParse({ ...ok, v: 999 }).success).toBe(false)
   })
 
   it('clampToWorld 는 원 밖 좌표를 경계로 끌어온다', () => {
