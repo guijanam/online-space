@@ -260,9 +260,9 @@ body[data-theme] .pill {
   font-size: 14px;
 }
 #picker .cards {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 .card {
   position: relative;
@@ -288,27 +288,29 @@ body[data-theme] .pill {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 22vh;
-  min-height: 110px;
-  max-height: 180px;
+  height: 15vh;
+  min-height: 92px;
+  max-height: 135px;
   background: var(--preview);
 }
 .card .art .emoji {
-  font-size: 52px;
+  font-size: 46px;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
 }
 .card .text {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 14px 18px 16px;
+  min-height: 104px;
+  padding: 12px 13px 14px;
 }
 .card strong {
-  font-size: 18px;
+  font-size: 16px;
 }
 .card small {
   color: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .card .badge {
   position: absolute;

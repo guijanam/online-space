@@ -1,0 +1,322 @@
+body[data-theme='subway'] {
+  background: #111a22;
+}
+
+body[data-theme='subway'] #status,
+body[data-theme='subway'] #hint,
+body[data-theme='subway'] #actionbar,
+body[data-theme='subway'] .fab,
+body[data-theme='subway'] #sound {
+  display: none;
+}
+
+body[data-theme='subway'] #switch {
+  z-index: 7;
+  background: rgba(12, 20, 28, 0.72);
+}
+
+#subway-game {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  background: #17232c;
+  color: #fff;
+}
+
+#subway-game[hidden] {
+  display: none;
+}
+
+#subway-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.subway-hud {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--safe-top) + 12px);
+  right: 56px;
+  left: 60px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  height: 54px;
+  border: 1px solid rgba(157, 215, 230, 0.2);
+  border-radius: 16px;
+  background: rgba(10, 19, 27, 0.75);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.subway-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: center;
+}
+
+.subway-stat small {
+  color: rgba(220, 239, 245, 0.58);
+  font-size: 9px;
+}
+
+.subway-stat strong {
+  color: #d8f5ff;
+  font-size: 19px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+#subway-pause {
+  position: absolute;
+  z-index: 6;
+  top: calc(var(--safe-top) + 12px);
+  right: 12px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(157, 215, 230, 0.2);
+  border-radius: 50%;
+  background: rgba(10, 19, 27, 0.75);
+  color: #d8f5ff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  touch-action: manipulation;
+}
+
+.subway-bars {
+  position: absolute;
+  z-index: 3;
+  top: calc(var(--safe-top) + 73px);
+  right: 14px;
+  left: 14px;
+  pointer-events: none;
+}
+
+.subway-bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(6, 13, 19, 0.72);
+}
+
+.subway-bar span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  transition: transform 0.15s;
+}
+
+.subway-bar.hp {
+  height: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.subway-bar.hp span {
+  background: linear-gradient(90deg, #4acb8b, #9be184);
+}
+
+.subway-bar.hp b {
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  font-size: 9px;
+  line-height: 13px;
+  text-align: center;
+  text-shadow: 0 1px 2px #17382b;
+}
+
+.subway-bar.xp {
+  height: 5px;
+  margin-top: 4px;
+}
+
+.subway-bar.xp span {
+  background: #6dd7fa;
+}
+
+#subway-joystick {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(var(--safe-bottom) + 28px);
+  left: 22px;
+  width: 112px;
+  height: 112px;
+  border: 2px solid rgba(203, 235, 244, 0.22);
+  border-radius: 50%;
+  background: rgba(10, 22, 30, 0.28);
+  box-shadow: inset 0 0 24px rgba(115, 198, 226, 0.08);
+  touch-action: none;
+}
+
+#subway-joystick::before {
+  content: '이동';
+  position: absolute;
+  top: 43px;
+  left: 0;
+  width: 100%;
+  color: rgba(224, 242, 248, 0.34);
+  font-size: 11px;
+  text-align: center;
+}
+
+#subway-joystick span {
+  position: absolute;
+  top: 32px;
+  left: 32px;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(220, 245, 255, 0.35);
+  border-radius: 50%;
+  background: rgba(118, 190, 215, 0.45);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.subway-auto {
+  position: absolute;
+  z-index: 3;
+  right: 24px;
+  bottom: calc(var(--safe-bottom) + 72px);
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: rgba(10, 22, 30, 0.45);
+  color: rgba(214, 240, 248, 0.62);
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.subway-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(6, 13, 19, 0.68);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.subway-overlay[hidden] {
+  display: none;
+}
+
+.subway-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 340px);
+  padding: 26px 20px 20px;
+  border: 1px solid rgba(163, 215, 230, 0.22);
+  border-radius: 26px;
+  background: linear-gradient(155deg, rgba(38, 61, 73, 0.98), rgba(15, 29, 39, 0.98));
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+
+#subway-logo {
+  font-size: 50px;
+}
+
+.subway-card h2 {
+  margin-top: 10px;
+  color: #ddf6ff;
+  font-size: 25px;
+}
+
+.subway-card p {
+  margin-top: 10px;
+  color: rgba(220, 239, 245, 0.7);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#subway-start {
+  width: 100%;
+  height: 48px;
+  margin-top: 20px;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, #a4e4f5, #5ab4d8);
+  color: #102f3d;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  box-shadow: 0 6px 20px rgba(80, 181, 215, 0.2);
+  touch-action: manipulation;
+}
+
+#subway-start[hidden] {
+  display: none;
+}
+
+#subway-start:active {
+  transform: scale(0.97);
+}
+
+#subway-record {
+  margin-top: 12px;
+  color: rgba(220, 239, 245, 0.45);
+  font-size: 10px;
+}
+
+#subway-upgrades {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  margin-top: 18px;
+}
+
+#subway-upgrades[hidden] {
+  display: none;
+}
+
+.upgrade-choice {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid rgba(155, 220, 238, 0.2);
+  border-radius: 14px;
+  background: rgba(105, 175, 197, 0.12);
+  color: #e3f7fc;
+  font: inherit;
+  text-align: left;
+  touch-action: manipulation;
+}
+
+.upgrade-choice:active {
+  background: rgba(105, 175, 197, 0.28);
+}
+
+.upgrade-choice .emoji {
+  grid-row: 1 / 3;
+  align-self: center;
+  font-size: 27px;
+}
+
+.upgrade-choice strong {
+  font-size: 13px;
+}
+
+.upgrade-choice small {
+  margin-top: 2px;
+  color: rgba(220, 239, 245, 0.58);
+  font-size: 11px;
+}
+
+@media (pointer: fine) {
+  #subway-joystick {
+    opacity: 0.42;
+  }
+}

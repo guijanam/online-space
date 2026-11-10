@@ -52,7 +52,7 @@ export type WorldThemeDef = ThemeBase & {
 
 export type GameThemeDef = ThemeBase & {
   kind: 'game'
-  game: 'star-catch'
+  game: 'star-catch' | 'subway-survivors'
 }
 
 export type ThemeDef = WorldThemeDef | GameThemeDef

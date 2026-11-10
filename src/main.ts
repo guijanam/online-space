@@ -20,6 +20,7 @@ import { Toast } from './ui/Toast'
 import { LanternSheet, confirmHide } from './ui/LanternSheet'
 import { pickTheme } from './ui/ThemePicker'
 import { StarCatchGame } from './game/StarCatchGame'
+import { SubwayGame } from './game/subway/SubwayGame'
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!
 
@@ -70,7 +71,8 @@ function start(theme: ThemeDef): void {
   $('#switch').hidden = false
   $('#switch').addEventListener('click', () => location.reload())
   if (theme.kind === 'game') {
-    new StarCatchGame($('#star-game')).start()
+    if (theme.game === 'subway-survivors') new SubwayGame($('#subway-game')).start()
+    else new StarCatchGame($('#star-game')).start()
     return
   }
   if (!hasWebGL()) {

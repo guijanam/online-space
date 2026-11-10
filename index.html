@@ -69,6 +69,31 @@
           </div>
         </div>
       </section>
+      <section id="subway-game" hidden aria-label="지하철 퇴치대 게임">
+        <canvas id="subway-canvas"></canvas>
+        <header class="subway-hud">
+          <div class="subway-stat"><small>생존 시간</small><strong id="subway-time">03:00</strong></div>
+          <div class="subway-stat"><small>처치</small><strong id="subway-kills">0</strong></div>
+          <div class="subway-stat"><small>레벨</small><strong id="subway-level">1</strong></div>
+        </header>
+        <div class="subway-bars">
+          <div class="subway-bar hp"><span id="subway-hp-bar"></span><b id="subway-hp">100 / 100</b></div>
+          <div class="subway-bar xp"><span id="subway-xp-bar"></span></div>
+        </div>
+        <button id="subway-pause" type="button" aria-label="게임 일시정지">Ⅱ</button>
+        <div id="subway-joystick" aria-label="이동 조이스틱"><span></span></div>
+        <div class="subway-auto">◎ 자동 조준</div>
+        <div id="subway-overlay" class="subway-overlay">
+          <div class="subway-card">
+            <span id="subway-logo" aria-hidden="true">🚇</span>
+            <h2 id="subway-title">지하철 퇴치대</h2>
+            <p id="subway-message">몰려드는 빌런을 피해 3분 동안 생존하세요.<br />이동만 하면 공격은 자동으로 발사됩니다.</p>
+            <div id="subway-upgrades" hidden></div>
+            <button id="subway-start" type="button">퇴치 시작</button>
+            <small id="subway-record">조이스틱 · 방향키 · WASD로 이동</small>
+          </div>
+        </div>
+      </section>
       <div id="rotate"><span>📱</span><p>화면을 세로로 돌려주세요</p></div>
     </main>
     <script type="module" src="/src/main.ts"></script>
