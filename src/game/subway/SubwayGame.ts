@@ -1,4 +1,5 @@
 import './subway.css'
+import type { AudioEngine } from '../../audio/AudioEngine'
 import {
   SURVIVAL_SECONDS,
   applyUpgrade,
@@ -18,6 +19,10 @@ const ENEMY_COLORS: Record<Enemy['kind'], string> = {
   blocker: '#875b9e',
   boss: '#a84862',
 }
+
+/** 배경 바닥 무늬 한 칸 (지하철 한 칸 폭 × 좌석 한 줄 높이). 이 무늬를 끝없이 이어 그린다. */
+const TILE_W = 390
+const TILE_H = 168
 
 const BEST_KILLS_KEY = 'subway.bestKills'
 const BEST_TIME_KEY = 'subway.bestTime'
@@ -65,8 +70,16 @@ export class SubwayGame {
   private lastFrame = 0
   private shownStatus = this.state.status
   private sprites = loadSprites()
+  /** 카메라 중심(세계 좌표). 주인공을 부드럽게 따라간다. */
+  private camera = { x: this.state.player.x, y: this.state.player.y }
 
-  constructor(private host: HTMLElement) {
+  /** 같은 효과음이 한 프레임에 여러 번 겹치지 않도록 마지막 재생 시각을 기억한다 */
+  private lastSfx = new Map<string, number>()
+
+  constructor(
+    private host: HTMLElement,
+    private audio?: AudioEngine,
+  ) {
     const q = <T extends HTMLElement>(selector: string) => host.querySelector<T>(selector)!
     this.canvas = q<HTMLCanvasElement>('#subway-canvas')
     this.ctx = this.canvas.getContext('2d')!
@@ -109,6 +122,8 @@ export class SubwayGame {
           get bullets() { return game.state.bullets.length },
           get time() { return game.state.time },
           get kills() { return game.state.kills },
+          get audio() { return game.audio?.state ?? 'none' },
+          audioLevel: () => game.audio?.level() ?? 0,
         },
       })
     }
@@ -123,11 +138,10 @@ export class SubwayGame {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     this.state.width = width
     this.state.height = height
-    this.state.player.x = Math.max(14, Math.min(width - 14, this.state.player.x))
-    this.state.player.y = Math.max(14, Math.min(height - 14, this.state.player.y))
   }
 
   private pressStart(): void {
+    this.audio?.unlock()
     if (this.state.status === 'paused') {
       this.state.status = 'running'
       this.syncOverlay()
@@ -136,6 +150,7 @@ export class SubwayGame {
     if (!['idle', 'over', 'won'].includes(this.state.status)) return
     this.state = createGame(this.host.clientWidth, this.host.clientHeight)
     this.state.status = 'running'
+    this.camera = { x: this.state.player.x, y: this.state.player.y }
     this.stick = { x: 0, y: 0 }
     this.overlay.hidden = true
     this.upgrades.hidden = true
@@ -154,10 +169,28 @@ export class SubwayGame {
     const keyboardX = Number(this.keys.has('arrowright') || this.keys.has('d')) - Number(this.keys.has('arrowleft') || this.keys.has('a'))
     const keyboardY = Number(this.keys.has('arrowdown') || this.keys.has('s')) - Number(this.keys.has('arrowup') || this.keys.has('w'))
     updateGame(this.state, { x: this.stick.x + keyboardX, y: this.stick.y + keyboardY }, dt)
+    this.playEvents(now)
+    this.followCamera(dt)
     this.render()
     this.updateHud()
     this.syncOverlay()
     requestAnimationFrame(this.frame)
+  }
+
+  private playEvents(now: number): void {
+    const events = this.state.events
+    if (!events.length) return
+    this.state.events = []
+    if (!this.audio) return
+    // 효과음마다 최소 간격(ms): 적이 많아져도 소리가 뭉개지지 않게
+    const gap = { shoot: 60, hit: 45, kill: 55, bossKill: 0, hurt: 0, gem: 40, levelup: 0, boss: 0, over: 0, won: 0 }
+    for (const event of events) {
+      const sfx = event.type === 'kill' && event.kind === 'boss' ? 'bossKill' : event.type
+      const last = this.lastSfx.get(sfx) ?? -Infinity
+      if (now - last < gap[sfx]) continue
+      this.lastSfx.set(sfx, now)
+      this.audio.subway(sfx)
+    }
   }
 
   private syncOverlay(): void {
@@ -204,6 +237,7 @@ export class SubwayGame {
       description.textContent = upgrade.description
       button.append(emoji, name, description)
       button.addEventListener('click', () => {
+        this.audio?.subway('pick')
         applyUpgrade(this.state, upgrade.id)
         this.upgrades.hidden = true
         this.overlay.hidden = true
@@ -242,30 +276,24 @@ export class SubwayGame {
     this.xpBar.style.transform = `scaleX(${Math.min(1, this.state.xp / this.state.xpNext)})`
   }
 
+  private followCamera(dt: number): void {
+    const { player } = this.state
+    // 살짝 늦게 따라가 움직임이 부드럽게 보이도록 (프레임 속도와 무관하게)
+    const k = 1 - Math.exp(-dt * 12)
+    this.camera.x += (player.x - this.camera.x) * k
+    this.camera.y += (player.y - this.camera.y) * k
+  }
+
   private render(): void {
     const { width: w, height: h } = this.state
     const ctx = this.ctx
     ctx.clearRect(0, 0, w, h)
-    ctx.fillStyle = '#17252e'
-    ctx.fillRect(0, 0, w, h)
-    ctx.fillStyle = '#2b3c43'
-    ctx.fillRect(w * 0.17, 0, w * 0.66, h)
-    ctx.strokeStyle = 'rgba(155,190,199,0.1)'
-    ctx.lineWidth = 1
-    for (let y = 0; y < h; y += 72) {
-      ctx.beginPath()
-      ctx.moveTo(w * 0.17, y)
-      ctx.lineTo(w * 0.83, y)
-      ctx.stroke()
-    }
-    ctx.strokeStyle = 'rgba(230,209,118,0.28)'
-    ctx.setLineDash([12, 14])
-    ctx.beginPath()
-    ctx.moveTo(w / 2, 0)
-    ctx.lineTo(w / 2, h)
-    ctx.stroke()
-    ctx.setLineDash([])
-    for (let y = 112; y < h; y += 168) this.drawSeats(y)
+    ctx.save()
+    // 세계 좌표 → 화면 좌표: 카메라 중심이 화면 가운데 오도록
+    ctx.translate(Math.round(w / 2 - this.camera.x), Math.round(h / 2 - this.camera.y))
+    const left = this.camera.x - w / 2
+    const top = this.camera.y - h / 2
+    this.drawFloor(left, top, w, h)
     for (const gem of this.state.gems) {
       ctx.save()
       ctx.translate(gem.x, gem.y)
@@ -287,6 +315,7 @@ export class SubwayGame {
     ctx.shadowBlur = 0
     for (const enemy of this.state.enemies) this.drawEnemy(enemy)
     this.drawPlayer()
+    ctx.restore()
     if (this.state.time > 55 && this.state.time < 60) {
       ctx.fillStyle = 'rgba(100,20,25,0.8)'
       ctx.fillRect(0, 124, w, 34)
@@ -302,21 +331,54 @@ export class SubwayGame {
     }
   }
 
-  private drawSeats(y: number): void {
-    const { width: w } = this.state
+  /** 화면에 보이는 범위만큼 지하철 바닥 무늬를 이어 그린다 (세계 좌표). */
+  private drawFloor(left: number, top: number, w: number, h: number): void {
     const ctx = this.ctx
+    ctx.fillStyle = '#17252e'
+    ctx.fillRect(left, top, w, h)
+    const startX = Math.floor(left / TILE_W) * TILE_W
+    const startY = Math.floor(top / TILE_H) * TILE_H
+    for (let tx = startX; tx < left + w; tx += TILE_W) {
+      // 통로 바닥과 가운데 점선
+      ctx.fillStyle = '#2b3c43'
+      ctx.fillRect(tx + TILE_W * 0.17, top, TILE_W * 0.66, h)
+      ctx.strokeStyle = 'rgba(230,209,118,0.28)'
+      ctx.lineWidth = 1
+      ctx.setLineDash([12, 14])
+      ctx.lineDashOffset = -top
+      ctx.beginPath()
+      ctx.moveTo(tx + TILE_W / 2, top)
+      ctx.lineTo(tx + TILE_W / 2, top + h)
+      ctx.stroke()
+      ctx.setLineDash([])
+      for (let ty = startY; ty < top + h; ty += TILE_H) {
+        ctx.strokeStyle = 'rgba(155,190,199,0.1)'
+        ctx.beginPath()
+        ctx.moveTo(tx + TILE_W * 0.17, ty)
+        ctx.lineTo(tx + TILE_W * 0.83, ty)
+        ctx.moveTo(tx + TILE_W * 0.17, ty + TILE_H / 2)
+        ctx.lineTo(tx + TILE_W * 0.83, ty + TILE_H / 2)
+        ctx.stroke()
+        this.drawSeats(tx, ty + 33)
+      }
+    }
+  }
+
+  private drawSeats(tileX: number, y: number): void {
+    const ctx = this.ctx
+    const seatW = TILE_W * 0.14
     for (const side of [-1, 1]) {
-      const x = side < 0 ? 8 : w - w * 0.14 - 8
+      const x = side < 0 ? tileX + 8 : tileX + TILE_W - seatW - 8
       ctx.fillStyle = '#416575'
       ctx.beginPath()
-      ctx.roundRect(x, y, w * 0.14, 102, 10)
+      ctx.roundRect(x, y, seatW, 102, 10)
       ctx.fill()
       ctx.fillStyle = '#20343e'
-      ctx.fillRect(side < 0 ? x + w * 0.14 - 5 : x, y + 7, 5, 88)
+      ctx.fillRect(side < 0 ? x + seatW - 5 : x, y + 7, 5, 88)
       ctx.strokeStyle = 'rgba(185,218,227,0.25)'
       ctx.beginPath()
       ctx.moveTo(x + 8, y + 51)
-      ctx.lineTo(x + w * 0.14 - 8, y + 51)
+      ctx.lineTo(x + seatW - 8, y + 51)
       ctx.stroke()
     }
   }

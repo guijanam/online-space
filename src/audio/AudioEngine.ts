@@ -1,4 +1,5 @@
 import { makeNoise, type Kit } from './synth'
+import { playSubway, type SubwaySfx } from './subwaySounds'
 import { AMBIENCES, footstep, lanternLaunch, type Ambience, type AmbienceId, type FootstepKind } from './sounds'
 
 const KEY = 'space.sound'
@@ -99,6 +100,12 @@ export class AudioEngine {
   lantern(vol = 1): void {
     if (!this.kit || !this.isPlaying()) return
     lanternLaunch(this.kit, vol)
+  }
+
+  /** 지하철 퇴치대 효과음 */
+  subway(sfx: SubwaySfx): void {
+    if (!this.kit || !this.isPlaying()) return
+    playSubway(this.kit, sfx)
   }
 
   private analyser: AnalyserNode | null = null

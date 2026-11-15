@@ -5,9 +5,15 @@ body[data-theme='subway'] {
 body[data-theme='subway'] #status,
 body[data-theme='subway'] #hint,
 body[data-theme='subway'] #actionbar,
-body[data-theme='subway'] .fab,
-body[data-theme='subway'] #sound {
+body[data-theme='subway'] .fab {
   display: none;
+}
+
+/* 소리 버튼은 체력·경험치 바 아래 오른쪽에 */
+body[data-theme='subway'] #sound {
+  z-index: 7;
+  top: calc(var(--safe-top) + 106px);
+  background: rgba(12, 20, 28, 0.72);
 }
 
 body[data-theme='subway'] #switch {

@@ -49,6 +49,22 @@ export type Bullet = {
 
 export type Gem = { x: number; y: number; value: number }
 
+/** 화면 쪽(효과음 등)에 알려줄 일. updateGame 이 쌓고 화면이 꺼내 간다. */
+export type SubwayEvent =
+  | { type: 'shoot' }
+  | { type: 'hit'; kind: EnemyKind }
+  | { type: 'kill'; kind: EnemyKind }
+  | { type: 'hurt' }
+  | { type: 'gem' }
+  | { type: 'levelup' }
+  | { type: 'boss' }
+  | { type: 'over' }
+  | { type: 'won' }
+
+/**
+ * 세계는 끝이 없고, width/height 는 주인공을 가운데 둔 화면(카메라) 크기다.
+ * 빌런 등장·정리 범위는 이 화면을 기준으로 정한다.
+ */
 export type SubwayState = {
   width: number
   height: number
@@ -68,6 +84,7 @@ export type SubwayState = {
   bossSpawned: boolean
   nextId: number
   random: () => number
+  events: SubwayEvent[]
 }
 
 export const UPGRADES: { id: UpgradeId; emoji: string; name: string; description: string }[] = [
@@ -141,16 +158,25 @@ export function createGame(width: number, height: number, random = Math.random):
     bossSpawned: false,
     nextId: 1,
     random,
+    events: [],
   }
 }
+
+/** 화면 밖 여유 거리: 카메라가 살짝 늦게 따라와도 빌런이 화면 안에서 갑자기 생기지 않게 */
+const SPAWN_MARGIN = 40
+/** 화면에서 이만큼 더 멀어진 빌런은 주인공 앞쪽 화면 가장자리로 다시 데려온다 */
+const RECYCLE_MARGIN = 220
 
 export function spawnEnemy(state: SubwayState, forcedKind?: EnemyKind, x?: number, y?: number): Enemy {
   const roll = state.random()
   const kind: EnemyKind = forcedKind ?? pickEnemyKind(state.time, roll)
   const { baseHp, ...base } = ENEMY_STATS[kind]
   const edge = Math.floor(state.random() * 4)
-  const px = x ?? (edge === 0 ? -base.r : edge === 1 ? state.width + base.r : state.random() * state.width)
-  const py = y ?? (edge >= 2 ? (edge === 2 ? -base.r : state.height + base.r) : state.random() * state.height)
+  const halfW = state.width / 2 + base.r + SPAWN_MARGIN
+  const halfH = state.height / 2 + base.r + SPAWN_MARGIN
+  const { x: cx, y: cy } = state.player
+  const px = x ?? (edge === 0 ? cx - halfW : edge === 1 ? cx + halfW : cx + (state.random() - 0.5) * state.width)
+  const py = y ?? (edge >= 2 ? (edge === 2 ? cy - halfH : cy + halfH) : cy + (state.random() - 0.5) * state.height)
   const hp = Math.round(baseHp * (kind === 'boss' ? 1 : 1 + state.time / 120))
   const facing: Facing = state.player.x >= px ? 1 : -1
   const enemy: Enemy = { id: state.nextId++, kind, x: px, y: py, ...base, hp, maxHp: hp, facing }
@@ -170,6 +196,7 @@ function fire(state: SubwayState): void {
     }
   }
   if (!target) return
+  state.events.push({ type: 'shoot' })
   const angle = Math.atan2(target.y - player.y, target.x - player.x)
   for (let i = 0; i < player.multiShot; i++) {
     const a = angle + (i - (player.multiShot - 1) / 2) * 0.16
@@ -194,6 +221,7 @@ function gainXp(state: SubwayState, value: number): void {
   state.level++
   state.xpNext = Math.floor(state.xpNext * 1.35 + 8)
   state.status = 'levelup'
+  state.events.push({ type: 'levelup' })
 }
 
 export function updateGame(state: SubwayState, input: { x: number; y: number }, rawDt: number): void {
@@ -203,6 +231,7 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
   if (state.time >= SURVIVAL_SECONDS) {
     state.time = SURVIVAL_SECONDS
     state.status = 'won'
+    state.events.push({ type: 'won' })
     return
   }
   const { player } = state
@@ -212,12 +241,13 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
   const ny = length > 1 ? input.y / length : input.y
   if (nx > 0.05) player.facing = 1
   else if (nx < -0.05) player.facing = -1
-  player.x = Math.max(player.r, Math.min(state.width - player.r, player.x + nx * player.speed * dt))
-  player.y = Math.max(player.r, Math.min(state.height - player.r, player.y + ny * player.speed * dt))
+  player.x += nx * player.speed * dt
+  player.y += ny * player.speed * dt
 
   if (!state.bossSpawned && state.time >= 60) {
     state.bossSpawned = true
     spawnEnemy(state, 'boss')
+    state.events.push({ type: 'boss' })
   }
   state.spawnTimer -= dt
   if (state.spawnTimer <= 0 && state.enemies.length < 120) {
@@ -239,6 +269,7 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
     enemy.x += (dx / d) * enemy.speed * dt
     enemy.y += (dy / d) * enemy.speed * dt
     if (Math.abs(dx) > 2) enemy.facing = dx > 0 ? 1 : -1
+    recycleFarEnemy(state, enemy)
   }
   for (let i = 0; i < state.enemies.length; i++) {
     for (let j = i + 1; j < state.enemies.length; j++) {
@@ -267,18 +298,23 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
       if (enemy.hp <= 0 || bullet.hit.includes(enemy.id)) continue
       if (Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y) > enemy.r + 4) continue
       enemy.hp -= bullet.damage
+      if (enemy.hp > 0) state.events.push({ type: 'hit', kind: enemy.kind })
       bullet.hit.push(enemy.id)
       bullet.pierce--
     }
   }
+  const viewX = state.width / 2 + 20
+  const viewY = state.height / 2 + 20
   state.bullets = state.bullets.filter(
-    (bullet) => bullet.life > 0 && bullet.pierce >= 0 && bullet.x > -20 && bullet.x < state.width + 20 && bullet.y > -20 && bullet.y < state.height + 20,
+    (bullet) =>
+      bullet.life > 0 && bullet.pierce >= 0 && Math.abs(bullet.x - player.x) < viewX && Math.abs(bullet.y - player.y) < viewY,
   )
 
   const survivors: Enemy[] = []
   for (const enemy of state.enemies) {
     if (enemy.hp <= 0) {
       state.kills++
+      state.events.push({ type: 'kill', kind: enemy.kind })
       state.gems.push({ x: enemy.x, y: enemy.y, value: enemy.xp })
       continue
     }
@@ -286,8 +322,10 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
     if (state.invincible <= 0 && Math.hypot(enemy.x - player.x, enemy.y - player.y) < enemy.r + player.r) {
       player.hp = Math.max(0, player.hp - enemy.damage)
       state.invincible = 0.65
+      state.events.push({ type: 'hurt' })
       if (player.hp <= 0) {
         state.status = 'over'
+        state.events.push({ type: 'over' })
         break
       }
     }
@@ -302,11 +340,15 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
     const dy = player.y - gem.y
     const d = Math.hypot(dx, dy) || 1
     if (d < 24) {
+      state.events.push({ type: 'gem' })
       gainXp(state, gem.value)
       if (state.status !== 'running') {
         remainingGems.push(...state.gems.slice(i + 1))
         break
       }
+    } else if (Math.abs(dx) > state.width * 1.5 || Math.abs(dy) > state.height * 1.5) {
+      // 멀리 두고 온 보석은 정리한다 (계속 쌓이지 않게)
+      continue
     } else {
       if (d < player.magnet) {
         gem.x += (dx / d) * 250 * dt
@@ -316,6 +358,25 @@ export function updateGame(state: SubwayState, input: { x: number; y: number }, 
     }
   }
   state.gems = remainingGems
+}
+
+/**
+ * 주인공이 멀리 달아나 화면에서 한참 벗어난 빌런을,
+ * 주인공이 향하는 쪽(원래 있던 곳의 반대편) 화면 가장자리 바로 밖으로 옮긴다.
+ */
+function recycleFarEnemy(state: SubwayState, enemy: Enemy): void {
+  const { player } = state
+  const dx = enemy.x - player.x
+  const dy = enemy.y - player.y
+  const limitX = state.width / 2 + RECYCLE_MARGIN
+  const limitY = state.height / 2 + RECYCLE_MARGIN
+  if (Math.abs(dx) > limitX) {
+    enemy.x = player.x - Math.sign(dx) * (state.width / 2 + enemy.r + SPAWN_MARGIN)
+    enemy.y = player.y + Math.max(-state.height / 2, Math.min(state.height / 2, dy))
+  } else if (Math.abs(dy) > limitY) {
+    enemy.y = player.y - Math.sign(dy) * (state.height / 2 + enemy.r + SPAWN_MARGIN)
+    enemy.x = player.x + Math.max(-state.width / 2, Math.min(state.width / 2, dx))
+  }
 }
 
 export function upgradeChoices(state: SubwayState): typeof UPGRADES {

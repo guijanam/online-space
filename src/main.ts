@@ -71,7 +71,10 @@ function start(theme: ThemeDef): void {
   $('#switch').hidden = false
   $('#switch').addEventListener('click', () => location.reload())
   if (theme.kind === 'game') {
-    if (theme.game === 'subway-survivors') new SubwayGame($('#subway-game')).start()
+    if (theme.game === 'subway-survivors') {
+      setupSoundButton()
+      new SubwayGame($('#subway-game'), audio).start()
+    }
     else new StarCatchGame($('#star-game')).start()
     return
   }

@@ -18,16 +18,38 @@ function runningGame() {
 }
 
 describe('지하철 퇴치대 엔진', () => {
-  it('이동을 정규화하고 화면 밖으로 나가지 않는다', () => {
+  it('이동을 정규화하고 화면 크기에 갇히지 않는다', () => {
     const state = runningGame()
     const x = state.player.x
     const y = state.player.y
     updateGame(state, { x: 1, y: 1 }, 0.05)
-    expect(state.player.x).toBeGreaterThan(x)
-    expect(state.player.y).toBeGreaterThan(y)
-    for (let i = 0; i < 200; i++) updateGame(state, { x: -1, y: -1 }, 0.05)
-    expect(state.player.x).toBe(state.player.r)
-    expect(state.player.y).toBe(state.player.r)
+    const step = Math.hypot(state.player.x - x, state.player.y - y)
+    expect(step).toBeCloseTo(state.player.speed * 0.05)
+    for (let i = 0; i < 400; i++) updateGame(state, { x: -1, y: 0 }, 0.05)
+    expect(state.player.x).toBeLessThan(-2000)
+  })
+
+  it('빌런은 주인공 주변 화면 바로 밖에서 나타난다', () => {
+    const state = runningGame()
+    state.player.x = 5000
+    state.player.y = -3000
+    state.random = Math.random
+    for (let i = 0; i < 50; i++) {
+      const enemy = spawnEnemy(state)
+      const dx = Math.abs(enemy.x - state.player.x)
+      const dy = Math.abs(enemy.y - state.player.y)
+      expect(dx > state.width / 2 || dy > state.height / 2).toBe(true)
+      expect(dx).toBeLessThan(state.width)
+      expect(dy).toBeLessThan(state.height)
+    }
+  })
+
+  it('멀리 뒤처진 빌런은 주인공 앞쪽 화면 가장자리로 다시 온다', () => {
+    const state = runningGame()
+    const enemy = spawnEnemy(state, 'heckler', state.player.x - 2000, state.player.y)
+    updateGame(state, { x: 0, y: 0 }, 0.016)
+    expect(enemy.x).toBeGreaterThan(state.player.x + state.width / 2)
+    expect(enemy.x).toBeLessThan(state.player.x + state.width)
   })
 
   it('가장 가까운 빌런에게 자동으로 발사한다', () => {
@@ -134,5 +156,24 @@ describe('지하철 퇴치대 엔진', () => {
 
   it('강화 선택지는 세 개다', () => {
     expect(upgradeChoices(runningGame())).toHaveLength(3)
+  })
+})
+
+describe('효과음 이벤트', () => {
+  it('발사·피격·처치·피해를 이벤트로 남긴다', () => {
+    const state = createGame(390, 844, () => 0.5)
+    state.status = 'running'
+    state.spawnTimer = 99
+    state.shotTimer = 0
+    spawnEnemy(state, 'heckler', state.player.x + 90, state.player.y)
+    state.enemies[0].hp = 1
+    for (let i = 0; i < 15; i++) updateGame(state, { x: 0, y: 0 }, 0.016)
+    expect(state.events.map((e) => e.type)).toEqual(['shoot', 'kill'])
+    state.events = []
+    state.invincible = 0
+    spawnEnemy(state, 'blocker', state.player.x, state.player.y)
+    state.enemies.at(-1)!.hp = 1e9
+    updateGame(state, { x: 0, y: 0 }, 0.016)
+    expect(state.events.map((e) => e.type)).toContain('hurt')
   })
 })
